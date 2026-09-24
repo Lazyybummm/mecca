@@ -36,6 +36,7 @@ wss.on('connection',(socket)=>{
             }
             if(!rooms.get(roomId)){
                 rooms.set(roomId,new Set());
+                roomAdmins.set(roomId,userName);//setting the room admin
             }
             rooms.get(roomId).add(userName);
             const currentMembers=rooms.get(roomId);
@@ -67,6 +68,9 @@ wss.on('connection',(socket)=>{
                 payload:payload.data//this will the current cooridnates of that particular playef
                }))
             }
+        }
+        if(payload.type=='start-game'){
+            //check if the user initiating is a host or not 
         }
 
     })
