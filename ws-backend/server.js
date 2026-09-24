@@ -34,7 +34,8 @@ function cron(roomId){
                 roomId:roomId
             }))
         }
-    },60000)
+        roomStates.set(roomId,'seek-started');
+    },120000)
 
 }
 
@@ -85,6 +86,7 @@ wss.on('connection',(socket)=>{
             }
             if(!rooms.get(roomId)){
                 rooms.set(roomId,new Set());
+                roomStates.set(roomId,'created')
                 roomAdmins.set(roomId,userName);//setting the room admin
             }
             rooms.get(roomId).add(userName);
@@ -130,6 +132,7 @@ wss.on('connection',(socket)=>{
                         event:'player limit',
                         message:'not enough participants'
                     }))
+                    return;
                 }
                 const {hunters,hiders}=selectHunters(roomLength,roomId);//when destructuring , the name of the variable should be same as the return variables
                 for(a of hunters){
@@ -147,6 +150,8 @@ wss.on('connection',(socket)=>{
                         role:'hider'
                     }))
                 }
+
+                roomStates.set(roomId,'hide-phase')
 
                 cron(roomId)
                 
