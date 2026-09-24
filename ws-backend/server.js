@@ -59,7 +59,7 @@ function cron(roomId,topic,time){//a usable cron i can register(look more into t
 
 function selectHunters(size,roomId){//add the least hunter functioanlity later on 
     //decide the number of hunters based on the number of participants
-   const hunterCount=hunterNum(size);
+   let hunterCount=hunterNum(size);
    const hunterArray=[];
    const currentPlayers=rooms.get(roomId)
    const currentArray=[...currentPlayers];//converting into an array for better access
