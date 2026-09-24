@@ -25,7 +25,7 @@ function hunterNum(size){
 
 function cron(roomId,topic,time){//a usable cron i can register(look more into this)
 
-    setTimeout(()=>{
+    const handle=setTimeout(()=>{
         const players=rooms.get(roomId);
         let result;
         const roomInfo=roomStates.get(roomId)
@@ -48,6 +48,12 @@ function cron(roomId,topic,time){//a usable cron i can register(look more into t
         }
        
     },time)
+
+    const state=roomStates.get(roomId);
+    if(state){
+        if(topic=='seek-phase')state.hideTimer=handle;
+        if(topic=='room-end')state.seekTimer=handle;
+    }
 
 }
 
@@ -173,7 +179,7 @@ wss.on('connection',(socket)=>{
                     hiderSet:new Set(hiders),
 
                     remainingHiders:hiders.length,
-                    caught:new Set(),
+                    caught:new Set(),//this will handle that duplicate event sending 
 
                     positions:{},
                     poses:{},
@@ -196,6 +202,49 @@ wss.on('connection',(socket)=>{
 
 
             //check if the user initiating is a host or not 
+        }
+        if(payload.type=='mark-caught'){
+            const roomId=payload.data.roomId;
+            const senderUsername=payload.data.senderUsername;
+            const targetUsername=payload.data.targetUsername;
+            const roomInfo=roomStates.get(roomId);
+            if(!roomInfo.hunterSet.has(senderUsername)|| !roomInfo.hiderSet.has(targetUsername)){
+                socket.send(JSON.stringify({
+                    event:'not authorized',
+                    message:'not authorized to perform this action'
+                }))
+                return;
+            }
+            roomInfo.caught.add(targetUsername);
+            roomInfo.remainingHiders=roomInfo.remainingHiders-1;
+            //we can notify everyone also that this oaricular person is caught 
+            const players=rooms.get(roomId);
+            for(const p of players){//boradcasting to eveyrone that this particular user has been caught and to update thie rlocal states 
+                const sock=idtoSocket.get(p);
+                sock.send(JSON.stringify({
+                    event:'player caught',
+                    hunter:senderUsername,
+                    hider:targetUsername
+                }))
+            }
+
+            // all hiders caught - end the round now, cancel the pending timer
+            if(roomInfo.remainingHiders===0){
+                if(roomInfo.seekTimer){
+                    clearTimeout(roomInfo.seekTimer);
+                    roomInfo.seekTimer=null;
+                }
+                roomInfo.phase='ended';
+                for(const p of players){
+                    const sock=idtoSocket.get(p);
+                    sock.send(JSON.stringify({
+                        event:'room-end',
+                        roomId:roomId,
+                        payload:'hunters won'
+                    }))
+                }
+            }
+
         }
 
     })
