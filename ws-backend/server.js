@@ -2,14 +2,63 @@ import { WebSocketServer } from "ws";
 
 const wss=new WebSocketServer({port:8080});
 const rooms=new Map();
+const roomStates=new Map();
 const idtoSocket=new Map();
 const roomAdmins=new Map();
+const huntCount=new Map();
+
+
+
+//helper functions 
+function hunterNum(size){
+    if(size>1 && size<6){
+        return 1;
+    }
+    if(size>=6 && size<10){
+        return 2 ;
+    }
+    return 0;
+    //so and so 
+    //rules will be defined here , 
+
+}
+
+function cron(roomId){
+
+    setTimeout(()=>{
+        const players=rooms.get(roomId);
+        for(const i of players){
+            const sock=idtoSocket.get(i);
+            sock.send(JSON.stringify({
+                event:'game starts',
+                roomId:roomId
+            }))
+        }
+    },60000)
+
+}
+
+function selectHunters(size,roomId){//add the least hunter functioanlity later on 
+    //decide the number of hunters based on the number of participants
+   const hunterCount=hunterNum(size);
+   const hunterArray=[];
+   const currentPlayers=rooms.get(roomId)
+   const currentArray=[...currentPlayers];//converting into an array for better access
+   while(hunterCount!=0 && currentArray.length>0){
+        const randIndex=Math.floor(Math.random()*currentArray.length)
+        const element=currentArray[randIndex];
+        currentArray.splice(randIndex,1);
+        hunterArray.push(element);
+    hunterCount--;
+   }
+   return {hunters:hunterArray,hiders:currentArray};
+
+
+}
+
 
 wss.on('connection',(socket)=>{
-    socket.on('open',()=>{
-        socket.send(JSON.stringify('connected'));
-    })
-
+    socket.send(JSON.stringify('connected'));
 
     socket.on('message',(msg)=>{
         const payload=JSON.parse(msg);//the msg comes as a binary , json parse converts that into a string for us (otherwsi i had to handle the conversion)
@@ -70,6 +119,47 @@ wss.on('connection',(socket)=>{
             }
         }
         if(payload.type=='start-game'){
+            const senderuserName=payload.data.userName;
+            const roomId=payload.data.roomId;
+            const hostName=roomAdmins.get(roomId);
+            if(hostName==senderuserName){
+                //calculate the length of the room
+                const roomLength=rooms.get(roomId).size;
+                if(roomLength<3){
+                    socket.send(JSON.stringify({
+                        event:'player limit',
+                        message:'not enough participants'
+                    }))
+                }
+                const {hunters,hiders}=selectHunters(roomLength,roomId);//when destructuring , the name of the variable should be same as the return variables
+                for(a of hunters){
+                    const sock=idtoSocket.get(a);
+                    sock.send(JSON.stringify({
+                        event:'game-started',
+                        role:'hunter'
+                    }))
+                }
+
+                for(b of hiders){
+                    const sock=idtoSocket.get(b)
+                    sock.send(JSON.stringify({
+                         event:'game-started',
+                        role:'hider'
+                    }))
+                }
+
+                cron(roomId)
+                
+                //now i need to run a callback which sends the time starts event after 60 seconds , 
+
+
+            }
+            else{
+                socket.send(JSON.stringify('only host can perform this action'));
+                return;
+            }
+
+
             //check if the user initiating is a host or not 
         }
 
