@@ -41,7 +41,33 @@ input[type=range]{width:100%;accent-color:#e0407b}
 <div id="overlay"><div id="logo"><div id="l1"></div><div id="l2"></div></div>
 <p>Hide. Blend in. Don't get found.<br>Paint (F), pose (hold R) and move - all at once. Practice maps, no time limit.</p>
 <div id="maps"><div class="mapc on" data-map="Mansion">Hide-and-Seek<br>Mansion</div><div class="mapc" data-map="Backrooms">Backrooms</div><div class="mapc" data-map="Sewer">Sewer</div></div>
-<div class="btn" id="btnplay">PLAY</div></div>
+<div class="btn" id="btnplay">PLAY (Solo Practice)</div>
+<div class="btn" id="btnmp" style="margin-top:10px;background:#33c3ff">MULTIPLAYER</div></div>
+<div id="mp" class="hidden" style="position:absolute;inset:0;z-index:40;display:flex;align-items:center;justify-content:center;background:linear-gradient(rgba(0,0,0,.5),rgba(0,0,0,.75))">
+ <div style="background:#fff;color:#223;border-radius:20px;padding:22px 26px;width:320px;box-shadow:0 6px 0 rgba(0,0,0,.3)">
+  <h2 style="margin:0 0 12px;color:#e0407b">MULTIPLAYER</h2>
+  <label style="font-size:12px;font-weight:700">Server URL</label>
+  <input id="mpurl" value="ws://localhost:8080" style="width:100%;margin:4px 0 10px;padding:8px;border-radius:8px;border:1px solid #ccd;font:inherit">
+  <label style="font-size:12px;font-weight:700">Your name</label>
+  <input id="mpname" placeholder="e.g. player1" style="width:100%;margin:4px 0 10px;padding:8px;border-radius:8px;border:1px solid #ccd;font:inherit">
+  <label style="font-size:12px;font-weight:700">Room ID</label>
+  <input id="mproom" placeholder="e.g. room1" style="width:100%;margin:4px 0 12px;padding:8px;border-radius:8px;border:1px solid #ccd;font:inherit">
+  <div class="btn" id="mpconnect" style="width:100%;text-align:center;background:#33c3ff">CONNECT & JOIN</div>
+  <div id="mpstatus" style="margin-top:10px;font-size:12px;min-height:18px;color:#666"></div>
+  <div id="mplist" style="margin:6px 0;font-size:12px;max-height:90px;overflow:auto"></div>
+  <div class="btn" id="mpstart" style="width:100%;text-align:center;margin-top:8px;background:#a6f0b8;display:none">START GAME</div>
+  <div id="mpback" style="text-align:center;margin-top:10px;font-size:12px;text-decoration:underline;cursor:pointer;color:#888">back</div>
+ </div>
+</div>
+<div id="rolebanner" class="hidden pill" style="top:16px;left:50%;transform:translateX(-50%);z-index:22;font-weight:800"></div>
+<div id="endscreen" class="hidden" style="position:absolute;inset:0;z-index:45;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.75)">
+ <div style="background:#fff;color:#223;border-radius:20px;padding:26px 34px;text-align:center;box-shadow:0 6px 0 rgba(0,0,0,.3)">
+  <h2 id="endtitle" style="margin:0 0 10px">ROUND OVER</h2>
+  <div id="endsub" style="margin-bottom:16px;opacity:.7"></div>
+  <div class="btn" id="endagain" style="background:#a6f0b8;margin-bottom:8px;display:inline-block">PLAY AGAIN</div><br>
+  <div class="btn" id="endleave" style="background:#ff9f9f;display:inline-block;margin-top:8px">LEAVE</div>
+ </div>
+</div>
 <div id="toast"></div><div id="ring"></div><div id="wheel"></div>
 <div class="pill" id="role">You are a <b>CHAMELEON</b> · <span id="mapname"></span></div>
 <div id="panel" class="hidden">
@@ -320,6 +346,12 @@ cvEl.addEventListener('contextmenu',e=>e.preventDefault());
 cvEl.addEventListener('pointerdown',e=>{
  if(wOpen){wPage^=1;buildWheel();return;}
  cvEl.setPointerCapture(e.pointerId);mx=lx=e.clientX;my=ly=e.clientY;
+ if(net.active&&net.role==='hunter'&&e.button===0){
+  const meshes=[...remotePlayers.values()].filter(r=>!r.caught).flatMap(r=>r.group.children);
+  const h=cast(meshes,e.clientX,e.clientY);
+  if(h)for(const[name,r]of remotePlayers)if(r.group.children.includes(h.object)){mpSend('mark-caught',{roomId:net.roomId,senderUsername:net.myName,targetUsername:name});break;}
+  orbit=true;cvEl.style.cursor='grabbing';return;
+ }
  if(!paintMode||e.button!==0){orbit=true;cvEl.style.cursor='grabbing';return;}
  if(tool==='pick'||e.altKey){pick(e.clientX,e.clientY);if(tool==='pick')setTool('brush');return;}
  if(tool==='bucket'){const h=cast(paintMeshes,e.clientX,e.clientY);if(h){snap();paint3D(bindAt(h),.32,'brush');}return;}
@@ -331,7 +363,7 @@ addEventListener('blur',()=>{for(const k in keys)keys[k]=false;});
 addEventListener('wheel',e=>{dist=Math.max(2,Math.min(10,dist+e.deltaY*.005));});
 addEventListener('keydown',e=>{
  if(e.target===picker||!started)return;if(e.code==='Space')e.preventDefault();if(e.repeat)return;keys[e.code]=true;
- if(e.code==='KeyF')setPaint(!paintMode);
+ if(e.code==='KeyF'&&!(net.active&&net.role==='hunter'))setPaint(!paintMode);
  if(e.code==='KeyZ'&&e.ctrlKey&&paintMode)undo();
  if(e.code==='KeyV'&&paintMode)setTool(tool==='shade'?'brush':'shade');
  if(e.code==='Space'&&paintMode)pick(mx,my);
@@ -349,7 +381,7 @@ renderer.setAnimationLoop(()=>{
  const dt=Math.min(clock.getDelta(),.05);t+=dt;const p=cham.position;prev.copy(p);des.set(0,0,0);
  const crouch=!!(keys.ControlLeft||keys.ControlRight);
  if(keys.KeyQ)yawT+=dt*2;if(keys.KeyE)yawT-=dt*2;
- if(started){const fwd=new THREE.Vector3(-Math.sin(yaw),0,-Math.cos(yaw)),right=new THREE.Vector3(Math.cos(yaw),0,-Math.sin(yaw)),dir=new THREE.Vector3();
+ if(started&&!frozen){const fwd=new THREE.Vector3(-Math.sin(yaw),0,-Math.cos(yaw)),right=new THREE.Vector3(Math.cos(yaw),0,-Math.sin(yaw)),dir=new THREE.Vector3();
   if(keys.KeyW||keys.ArrowUp)dir.add(fwd);if(keys.KeyS||keys.ArrowDown)dir.sub(fwd);if(keys.KeyD||keys.ArrowRight)dir.add(right);if(keys.KeyA||keys.ArrowLeft)dir.sub(right);
   if(dir.lengthSq()>0)des.copy(dir.normalize()).multiplyScalar(crouch?2.6:(pose==='Stand'?5.4:3.2));
   if(keys.Space&&!paintMode&&p.y<=.001)vy=8.2;}
@@ -376,6 +408,7 @@ renderer.setAnimationLoop(()=>{
  if(paintMode&&painting&&(tool==='brush'||tool==='erase'||tool==='shade')){const dx=mx-lx,dy=my-ly,steps=Math.max(1,Math.ceil(Math.hypot(dx,dy)/3));
   for(let i=1;i<=steps;i++){const h=cast(paintMeshes,lx+dx*i/steps,ly+dy*i/steps);if(h)paint3D(bindAt(h),size,tool);}lx=mx;ly=my;}
  if(volDirty){volTex.needsUpdate=true;volDirty=false;}
+ remotePlayers.forEach(r=>{const g=r.group,k=1-Math.exp(-10*dt);g.position.x+=(r.tx-g.position.x)*k;g.position.y+=(r.ty-g.position.y)*k;g.position.z+=(r.tz-g.position.z)*k;g.rotation.y+=wrap(r.try_-g.rotation.y)*k;});
  yaw+=(yawT-yaw)*(1-Math.exp(-28*dt));pitch+=(pitchT-pitch)*(1-Math.exp(-28*dt));
  camT.lerp(new THREE.Vector3(p.x,1.15+p.y*.6,p.z),1-Math.exp(-22*dt));cd+=(dist-cd)*(1-Math.exp(-8*dt));
  const off=new THREE.Vector3(Math.sin(yaw)*Math.cos(pitch),Math.sin(pitch),Math.cos(yaw)*Math.cos(pitch)).normalize();
@@ -385,5 +418,76 @@ renderer.setAnimationLoop(()=>{
  const showRing=paintMode&&(tool==='brush'||tool==='erase'||tool==='shade');ring.style.display=showRing?'block':'none';
  if(showRing){const d=size/(camD*Math.tan(camera.fov*Math.PI/360))*innerHeight;ring.style.width=ring.style.height=d+'px';ring.style.left=mx+'px';ring.style.top=my+'px';}
  sun.position.set(p.x+10,18,p.z+8);sun.target.position.copy(p);renderer.render(scene,camera);});
+// ================= Multiplayer =================
+const $$=id=>document.getElementById(id);
+const net={ws:null,myName:'',roomId:'',role:null,active:false,ended:false,players:new Set()};
+let frozen=false,mpMoveTimer=null,mpCountdown=null;
+const remotePlayers=new Map(),remoteGroup=new THREE.Group();scene.add(remoteGroup);
+function remoteAvatar(){const g=new THREE.Group(),m=new THREE.MeshBasicMaterial({color:0xffffff});
+ const b=new THREE.Mesh(new THREE.CapsuleGeometry(.28,.55,6,12),m);b.position.y=.73;g.add(b);
+ const h=new THREE.Mesh(new THREE.SphereGeometry(.28,16,12),m);h.position.y=1.35;g.add(h);g.userData.mat=m;return g;}
+function ensureRemote(name){let r=remotePlayers.get(name);if(!r){const group=remoteAvatar();remoteGroup.add(group);r={group,tx:0,ty:0,tz:0,try_:0,caught:false};remotePlayers.set(name,r);}return r;}
+function removeAllRemotes(){remotePlayers.forEach(r=>remoteGroup.remove(r.group));remotePlayers.clear();}
+function mpStatus(s){$$('mpstatus').textContent=s;}
+function mpAddPlayer(n){if(net.players.has(n))return;net.players.add(n);const d=document.createElement('div');d.textContent=n===net.myName?n+' (you)':n;$$('mplist').appendChild(d);}
+function mpSend(type,data){if(net.ws&&net.ws.readyState===1)net.ws.send(JSON.stringify({type,data}));}
+
+$$('btnmp').onclick=()=>{overlay.classList.add('hidden');$$('mp').classList.remove('hidden');};
+$$('mpback').onclick=()=>{$$('mp').classList.add('hidden');overlay.classList.remove('hidden');};
+$$('mpconnect').onclick=()=>{
+ const url=$$('mpurl').value.trim(),name=$$('mpname').value.trim(),room=$$('mproom').value.trim();
+ if(!name||!room){mpStatus('Enter a name and a room ID.');return;}
+ if(net.ws)try{net.ws.close();}catch(e){}
+ net.myName=name;net.roomId=room;net.players.clear();$$('mplist').innerHTML='';mpStatus('Connecting...');
+ let sock;try{sock=new WebSocket(url);}catch(e){mpStatus('Invalid server URL.');return;}
+ net.ws=sock;
+ sock.onopen=()=>{mpStatus('Connected. Setting up...');mpSend('user-setup',{userName:name});};
+ sock.onclose=()=>{if(!net.ended)mpStatus('Disconnected from server.');};
+ sock.onerror=()=>{mpStatus("Couldn't reach the server - check the URL and that it's running.");};
+ sock.onmessage=ev=>{let m;try{m=JSON.parse(ev.data);}catch(e){return;}mpHandle(m);};
+};
+function mpHandle(m){
+ const text=typeof m==='string'?m:m.message;
+ if(text==='connected')return;
+ if(text==='user setup is complete'){mpSend('join-room',{roomId:net.roomId,userName:net.myName});return;}
+ if(text==='user setup complete'){mpStatus('That name is taken on this server - pick another and reconnect.');return;}
+ if(text==='roomId not found'){mpStatus('Enter a room ID first.');return;}
+ if(text==='succesfully joined the room'){mpStatus('Joined room "'+net.roomId+'" - waiting for players...');mpAddPlayer(net.myName);$$('mpstart').style.display='block';return;}
+ if(text==='only host can perform this action'){toast('Only the host can start the game.');return;}
+ if(m&&m.message==='a user joined'){mpAddPlayer(m.payload);return;}
+ if(m&&m.event==='player limit'){toast('Need at least 3 players to start.');return;}
+ if(m&&m.event==='game-started'){mpStartGame(m.role);return;}
+ if(m&&m.message==='a player moved'){mpMove(m.payload);return;}
+ if(m&&m.event==='not authorized'){toast("Can't mark that player caught.");return;}
+ if(m&&m.event==='player caught'){mpCaught(m.hunter,m.hider);return;}
+ if(m&&(m.event==='room-end'||m.event==='round-end')){mpEnd(m.payload);return;}
+ if(m&&m.event==='seek-phase'){$$('rolebanner').textContent=(net.role==='hunter'?'HUNTER':'HIDER')+' - SEEK PHASE';return;}
+}
+function mpStartGame(role){
+ net.role=role;net.active=true;net.ended=false;frozen=false;removeAllRemotes();
+ $$('mp').classList.add('hidden');$$('endscreen').classList.add('hidden');
+ started=true;setPaint(false);
+ const b=$$('rolebanner');b.classList.remove('hidden');b.style.background=role==='hunter'?'#ffb3b3':'#a6f0b8';
+ toast('You are the '+role.toUpperCase()+(role==='hunter'?' - click a hider to mark them caught':' - paint (F) and blend in'));
+ let left=120;clearInterval(mpCountdown);
+ const label=t=>b.textContent=(role==='hunter'?'HUNTER':'HIDER')+' - '+t;
+ label('HIDE '+left+'s');
+ mpCountdown=setInterval(()=>{left--;if(left<=0){label('SEEK PHASE');clearInterval(mpCountdown);}else label('HIDE '+left+'s');},1000);
+ clearInterval(mpMoveTimer);
+ mpMoveTimer=setInterval(()=>{if(!net.active)return;
+  mpSend('movement',{roomId:net.roomId,coordinates:{x:cham.position.x,y:cham.position.y,z:cham.position.z,ry:cham.rotation.y,pose,col:color,userName:net.myName}});},100);
+}
+function mpMove(c){if(!c||c.userName===net.myName)return;const r=ensureRemote(c.userName);if(r.caught)return;
+ r.tx=c.x;r.ty=c.y;r.tz=c.z;r.try_=c.ry||0;if(c.col)r.group.userData.mat.color.set(c.col);}
+function mpCaught(hunter,hider){toast(hider+' was caught by '+hunter+'!');
+ if(hider===net.myName){net.active=false;frozen=true;$$('rolebanner').textContent='YOU WERE CAUGHT';}
+ const r=remotePlayers.get(hider);if(r){r.caught=true;r.group.userData.mat.color.set(0x888888);}}
+function mpEnd(result){if(net.ended)return;net.ended=true;net.active=false;clearInterval(mpMoveTimer);clearInterval(mpCountdown);
+ $$('endtitle').textContent=result?result.toUpperCase():"TIME'S UP - HIDERS WIN";
+ $$('endsub').textContent='Room "'+net.roomId+'"';$$('endscreen').classList.remove('hidden');}
+$$('endagain').onclick=()=>{mpSend('start-game',{userName:net.myName,roomId:net.roomId});$$('endscreen').classList.add('hidden');mpStatus('Asked the host to start a new round...');};
+$$('endleave').onclick=()=>location.reload();
+$$('mpstart').onclick=()=>mpSend('start-game',{userName:net.myName,roomId:net.roomId});
+
 addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
 </script></body></html>

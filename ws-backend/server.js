@@ -134,7 +134,7 @@ wss.on('connection',(socket)=>{
                 const sock=idtoSocket.get(p);
                sock.send(JSON.stringify({
                 message:'a player moved',
-                payload:payload.data//this will the current cooridnates of that particular playef
+                payload:payload.data.coordinates//this will the current cooridnates of that particular playef
                }))
             }
         }
@@ -228,7 +228,7 @@ wss.on('connection',(socket)=>{
                 }))
             }
 
-            // all hiders caught - end the round now, cancel the pending timer
+            // all hiders caught ,end the round now, cancel the pending timer
             if(roomInfo.remainingHiders===0){
                 if(roomInfo.seekTimer){
                     clearTimeout(roomInfo.seekTimer);
