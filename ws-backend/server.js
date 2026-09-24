@@ -23,19 +23,31 @@ function hunterNum(size){
 
 }
 
-function cron(roomId){
+function cron(roomId,topic,time){//a usable cron i can register(look more into this)
 
     setTimeout(()=>{
         const players=rooms.get(roomId);
+        let result;
+        const roomInfo=roomStates.get(roomId)
+        if(topic=='room-end'){//calculate the winner 
+            if(roomInfo.remainingHiders>0){
+                    result='hiders won'
+            }
+            else{
+                result='hunters won'
+            }
+        }
         for(const i of players){
             const sock=idtoSocket.get(i);
             sock.send(JSON.stringify({
-                event:'game starts',
-                roomId:roomId
+                event:topic,
+                roomId:roomId,
+                payload:result?result:null
+                
             }))
         }
-        roomStates.set(roomId,'seek-started');
-    },120000)
+       
+    },time)
 
 }
 
@@ -86,7 +98,7 @@ wss.on('connection',(socket)=>{
             }
             if(!rooms.get(roomId)){
                 rooms.set(roomId,new Set());
-                roomStates.set(roomId,'created')
+                roomStates.set(roomId,{phase:'created'})
                 roomAdmins.set(roomId,userName);//setting the room admin
             }
             rooms.get(roomId).add(userName);
@@ -135,7 +147,7 @@ wss.on('connection',(socket)=>{
                     return;
                 }
                 const {hunters,hiders}=selectHunters(roomLength,roomId);//when destructuring , the name of the variable should be same as the return variables
-                for(a of hunters){
+                for(const a of hunters){
                     const sock=idtoSocket.get(a);
                     sock.send(JSON.stringify({
                         event:'game-started',
@@ -143,7 +155,7 @@ wss.on('connection',(socket)=>{
                     }))
                 }
 
-                for(b of hiders){
+                for(const b of hiders){
                     const sock=idtoSocket.get(b)
                     sock.send(JSON.stringify({
                          event:'game-started',
@@ -151,9 +163,27 @@ wss.on('connection',(socket)=>{
                     }))
                 }
 
-                roomStates.set(roomId,'hide-phase')
+                roomStates.set(roomId,{
+                    phase:'hide',
+                    startedAt:Date.now(),
 
-                cron(roomId)
+                    hunters:[...hunters],
+                    hiders:[...hiders],
+                    hunterSet:new Set(hunters),
+                    hiderSet:new Set(hiders),
+
+                    remainingHiders:hiders.length,
+                    caught:new Set(),
+
+                    positions:{},
+                    poses:{},
+
+                    hideTimer:null,
+                    seekTimer:null,
+                })
+
+                cron(roomId,'seek-phase',120000)
+                cron(roomId,'round-end',600000)//providing them ten minutes for seek
                 
                 //now i need to run a callback which sends the time starts event after 60 seconds , 
 
