@@ -38,6 +38,10 @@ function cron(roomId,topic,time){//a usable cron i can register(look more into t
             else{
                 result='hunters won'
             }
+            roomInfo.phase='ended';
+        }
+        if(topic=='seek-phase'){
+            roomInfo.phase='seek';
         }
         for(const i of players){
             const sock=idtoSocket.get(i);
@@ -123,6 +127,10 @@ wss.on('connection',(socket)=>{
             rooms.get(roomId).add(userName);
             const userState=ingameState.get(userName);
             if(userState)userState.roomId=roomId;
+            const roomState=roomStates.get(roomId);
+            if(roomState&&roomState.phase=='created'&&rooms.get(roomId).size>=2){
+                roomState.phase='lobby';
+            }
             const currentMembers=rooms.get(roomId);
             socket.send(JSON.stringify({
                 message:'succesfully joined the room',
@@ -275,10 +283,11 @@ wss.on('connection',(socket)=>{
                     const st=ingameState.get(p);
                     if(st){st.role=null;st.caught=false;}
                 }
+                roomInfo.phase='lobby';
             }
 
         }
-        else if(payload.topic=='changed-pose'){
+        else if(payload.type=='changed-pose'){
             const userName=payload.data.userName;
             const pose=payload.data.pose
             let currentState=ingameState.get(userName);
@@ -302,6 +311,108 @@ wss.on('connection',(socket)=>{
 
             
         }
+        else if(payload.type=='request-state'){
+            const roomId=payload.data.roomId;
+            let filteredData=[];
+            //need to filter out all the object values with the given key 
+             for(p of ingameState.values){//returns an iterator for the map
+                if(p.roomId==roomId){
+                    filteredData.push(p);
+                }
+             }
+             socket.send(JSON.stringify({
+                event:'requested data',
+                payload:filteredData
+             }))
+        }
+        else if(payload.type=='leave-room'){
+            //reset the player's state if they are the last hider/hunter ->the round is gonna end 
+            //else just roomid as null ,notify everyone , make decerments here and there and continue 
+            
+            const roomId=payload.data.roomId;
+            const userName=payload.data.userName;
+            const roomState=roomStates.get(roomId);
+            if(roomState.phase=='lobby'){
+                rooms.get(roomId).delete(userName);
+                const userStateLobby=ingameState.get(userName);
+                if(userStateLobby)userStateLobby.roomId=null;
+                const currentMembers=rooms.get(roomId);
+                for (const p of currentMembers){
+                    const sock=idtoSocket.get(p);
+                    sock.send(JSON.stringify({
+                        event:'user left',
+                        userName:userName
+                    }))
+                }
+                return;
+            }
+            if(roomState.phase=='seek'|| roomState.phase=='hide'){
+                rooms.get(roomId).delete(userName);
+                const userState=ingameState.get(userName);
+                if(userState.role=='hider'){
+                    roomState.remainingHiders=roomState.remainingHiders-1;
+                    roomState.hiders.filter(c=>c!=userName)
+                    roomState.hiderSet.delete(userName);
+                    if(roomState.remainingHiders==0){
+                        roomState.phase='ended'
+                        if(userState)userState.roomId=null;
+                        const currentMembers=rooms.get(roomId);
+                        for (const p of currentMembers){
+                            const sock=idtoSocket.get(p);
+                            sock.send(JSON.stringify({
+                                event:'room ended as the last hider left',
+                                userName:userName
+                            }))
+                    }
+
+            
+                    //what if the last hider leaves , 
+                }
+                else{
+                    if(userState)userState.roomId=null;
+                    const currentMembers=rooms.get(roomId);
+                    for (const p of currentMembers){
+                        const sock=idtoSocket.get(p);
+                        sock.send(JSON.stringify({
+                            event:'user left',
+                            userName:userName
+                        }))
+                    }
+
+                }}//there can be a case where it is not set , should use if?
+                else{
+                    roomState.hunterSet.delete(userName)
+                    roomState.hunters.filter(c=>c!=userName)
+                    if(roomState.hunterSet.size==0){
+                        //now round should be ended
+                        roomState.phase='ended'
+                        if(userState)userState.roomId=null;
+                        const currentMembers=rooms.get(roomId);
+                        for (const p of currentMembers){
+                            const sock=idtoSocket.get(p);
+                            sock.send(JSON.stringify({
+                                event:'room ended as the hunter left',
+                                userName:userName
+                            }))
+                        }
+
+                    }
+                    else{
+                        if(userState)userState.roomId=null;
+                        const currentMembers=rooms.get(roomId);
+                        for (const p of currentMembers){
+                            const sock=idtoSocket.get(p);
+                            sock.send(JSON.stringify({
+                                event:'user left',
+                                userName:userName
+                            }))
+                        }
+                    }
+                }
+            }
+            
+        }
+
 
     })
 
