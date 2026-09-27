@@ -83,7 +83,7 @@ input[type=range]{width:100%;accent-color:#e0407b}
  </div>
 </div>
 <div id="toast"></div><div id="ring"></div><div id="wheel"></div>
-<div class="pill" id="role">You are a <b>CHAMELEON</b> · <span id="mapname"></span></div>
+<div class="pill" id="role">You are a <b>CHAMELEON</b> &middot; <span id="mapname"></span></div>
 <div id="panel" class="hidden">
 <h3>PAINT (F)</h3>
 <div class="grid five" id="tools"><div class="chip on" data-tool="brush">Brush</div><div class="chip" data-tool="pick">Pick</div><div class="chip" data-tool="bucket">Fill</div><div class="chip" data-tool="erase">Erase</div><div class="chip" data-tool="shade">Shade</div></div>
@@ -92,7 +92,7 @@ input[type=range]{width:100%;accent-color:#e0407b}
 <div class="row" style="margin-top:6px"><div class="chip" id="savec" style="flex:1">+ Save colour</div><div class="chip" id="undo" style="flex:1">Undo</div></div>
 <div class="row" style="margin-top:6px"><div class="chip" id="fillall" style="flex:1">Fill all</div><div class="chip" id="clearall" style="flex:1">Clear all</div></div>
 <div class="chip big" id="camo" style="background:#7fd6ff">AUTO-CAMO (C)</div><div class="chip big" id="camo8" style="background:#a6f0b8">CAMO ALL SIDES (Shift+C)</div><div class="chip big" id="done" style="margin-top:8px">DONE (F)</div>
-<small>Character is flat-shaded, so the paint shows exactly as painted: the same colour on every joint, no seams. Camo copies what is really rendered behind you (textures, shadows, fog included). Space: eyedropper anywhere · Right-drag / Q,E: rotate · Wheel: zoom · V: shade · M: next map · Ctrl+Z: undo</small>
+<small>Character is flat-shaded, so the paint shows exactly as painted: the same colour on every joint, no seams. Camo copies what is really rendered behind you (textures, shadows, fog included). Space: eyedropper anywhere &middot; Right-drag / Q,E: rotate &middot; Wheel: zoom &middot; V: shade &middot; M: next map &middot; Ctrl+Z: undo</small>
 </div>
 <div class="pill" id="hud"></div>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"}}</script>
@@ -256,21 +256,33 @@ charMat.onBeforeCompile=sh=>{Object.assign(sh.uniforms,volU);
  sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nattribute vec3 bindPos;\nvarying vec3 vBind;').replace('#include <begin_vertex>','#include <begin_vertex>\nvBind=bindPos;');
  sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\nvarying vec3 vBind;uniform highp sampler3D uVol;uniform vec3 uMin;uniform vec3 uSize;\nvec3 s2l(vec3 c){return mix(c/12.92,pow((c+.055)/1.055,vec3(2.4)),step(.04045,c));}')
   .replace('#include <map_fragment>','diffuseColor.rgb*=s2l(texture(uVol,(vBind-uMin)/uSize).rgb);');};
-const part=(geo,par,x=0,y=0,z=0,sc=[1,1,1])=>{const m=new THREE.Mesh(geo,charMat);m.position.set(x,y,z);m.scale.set(...sc);m.userData.part=true;par.add(m);paintMeshes.push(m);return m;};
+// Shared blobby-biped builder: one continuous set of overlapping spheres/capsules, no boxes, no hinge gaps.
+// Used for BOTH the local player and every networked player, so every character in the game shares one soft, featureless silhouette.
+function buildBlobBody(mat,parentGroup,register){
+ const P=(geo,par,x=0,y=0,z=0,sc=[1,1,1])=>{const m=new THREE.Mesh(geo,mat);m.position.set(x,y,z);m.scale.set(...sc);m.castShadow=true;par.add(m);if(register)register(m);return m;};
+ const STAND=.73,body=pv(parentGroup,0,STAND,0),flat=pv(body);
+ P(new THREE.CapsuleGeometry(.235,.12,6,16),flat,0,.13,0);                          // soft pelvis/belly blob - melts into the chest
+ const torsoP=pv(flat,0,.08,0);
+ P(new THREE.CapsuleGeometry(.245,.3,6,16),torsoP,0,.34,0);                         // chest capsule, deep overlap with pelvis below
+ P(new THREE.SphereGeometry(.165,20,16),torsoP,0,.57,0);                            // neck/shoulder blend blob - hides the head pivot
+ const headP=pv(torsoP,0,.62,0);
+ P(new THREE.SphereGeometry(.31,32,24),headP,0,.28,0,[1.05,.98,1]);                 // featureless, round head - stays a sphere
+ function limb(par,x,isArm){
+  const L1=isArm?.3:.34,L2=isArm?.3:.4,r1=isArm?.1:.13,r2=isArm?.085:.105,top=pv(par,x,isArm?.5:0,0);
+  P(new THREE.SphereGeometry(r1*1.3,16,14),top,0,0,0);                             // shoulder/hip: a sphere that visually merges into the torso, not a cube
+  P(new THREE.CapsuleGeometry(r1,Math.max(.02,L1-r1*1.5),5,14),top,0,-L1/2,0);      // upper limb - tapered capsule, buried deep in the joint sphere
+  const mid=pv(top,0,-L1,0);
+  P(new THREE.SphereGeometry(r1*1.05,14,12),mid,0,0,0);                            // elbow/knee: rounded blob, no hard corner
+  P(new THREE.CapsuleGeometry(r2,Math.max(.02,L2-r2*1.5),5,14),mid,0,-L2/2,0);      // lower limb, tapers down to a soft rounded end
+  return{top,mid};
+ }
+ const arms=[limb(torsoP,-.29,true),limb(torsoP,.29,true)],legsL=[limb(flat,-.13,false),limb(flat,.13,false)];
+ arms[0].top.rotation.set(0,0,-1.35);arms[1].top.rotation.set(0,0,1.35);legsL[0].top.rotation.set(0,0,-.35);legsL[1].top.rotation.set(0,0,.35);
+ return{body,flat,torsoP,headP,arms,legsL,STAND};
+}
 const cham=new THREE.Group();scene.add(cham);
-const STAND=.73,body=pv(cham,0,STAND,0),flat=pv(body);
-part(new THREE.BoxGeometry(.42,.3,.34),flat,0,.02,0);                                   // pelvis - flat box, not a sphere
-const torsoP=pv(flat,0,.08,0);
-part(new THREE.BoxGeometry(.44,.58,.36),torsoP,0,.3,0);                                  // torso
-part(new THREE.BoxGeometry(.22,.16,.22),torsoP,0,.58,0);                                 // neck
-const headP=pv(torsoP,0,.6,0);part(new THREE.SphereGeometry(.3,32,24),headP,0,.27,0,[1.08,.96,1]); // head stays round - the game's signature blank head
-function limb(par,x,isArm){const L1=isArm?.28:.32,L2=isArm?.3:.4,w1=isArm?.16:.22,w2=isArm?.14:.19,top=pv(par,x,isArm?.5:0,0);
- part(new THREE.BoxGeometry(w1*1.3,w1*1.3,w1*1.05),top);                                 // shoulder/hip joint - flat cube, not a ball
- part(new THREE.BoxGeometry(w1,L1+.04,w1*.85),top,0,-L1/2,0);
- const mid=pv(top,0,-L1,0);part(new THREE.BoxGeometry(w1*.95,w1*.95,w1*.8),mid);         // elbow/knee joint
- part(new THREE.BoxGeometry(w2,L2+.04,w2*.85),mid,0,-L2/2,0);return{top,mid};}
-const arms=[limb(torsoP,-.29,true),limb(torsoP,.29,true)],legsL=[limb(flat,-.13,false),limb(flat,.13,false)];
-arms[0].top.rotation.set(0,0,-1.35);arms[1].top.rotation.set(0,0,1.35);legsL[0].top.rotation.set(0,0,-.35);legsL[1].top.rotation.set(0,0,.35);
+const built=buildBlobBody(charMat,cham,m=>{m.userData.part=true;paintMeshes.push(m);});
+const {body,flat,torsoP,headP,arms,legsL,STAND}=built;
 cham.updateMatrixWorld(true);
 const bb0=new THREE.Box3(),tv=new THREE.Vector3();
 paintMeshes.forEach(m=>{const pos=m.geometry.attributes.position,arr=new Float32Array(pos.count*3);for(let i=0;i<pos.count;i++){tv.fromBufferAttribute(pos,i).applyMatrix4(m.matrixWorld);tv.toArray(arr,i*3);bb0.expandByPoint(tv);}
@@ -280,7 +292,8 @@ const vsz=bb0.getSize(new THREE.Vector3());VN=[Math.ceil(vsz.x/VS),Math.ceil(vsz
 volU.uSize.value.set(VN[0]*VS,VN[1]*VS,VN[2]*VS);
 volData=new Uint8Array(VN[0]*VN[1]*VN[2]*4);volTex=new THREE.Data3DTexture(volData,VN[0],VN[1],VN[2]);
 volTex.format=THREE.RGBAFormat;volTex.type=THREE.UnsignedByteType;volTex.minFilter=volTex.magFilter=THREE.LinearFilter;volTex.unpackAlignment=1;volU.uVol.value=volTex;
-function volFillAll(rgb){for(let i=0;i<volData.length;i+=4){volData[i]=rgb[0];volData[i+1]=rgb[1];volData[i+2]=rgb[2];volData[i+3]=255;}volDirty=true;}
+function volFillAll(rgb){for(let i=0;i<volData.length;i+=4){volData[i]=rgb[0];volData[i+1]=rgb[1];volData[i+2]=rgb[2];volData[i+3]=255;}volDirty=true;paintNetDirty=true;}
+let paintNetDirty=true,lastPaintSend=0;
 volFillAll([244,244,244]);volTex.needsUpdate=true;
 
 // ================= Poses =================
@@ -348,7 +361,7 @@ function paint3D(bp,rad,mode,rgb=rgbOf(color)){rad=Math.max(rad,VS*1.2);
   const d=Math.hypot(VMIN.x+(x+.5)*VS-bp.x,VMIN.y+(y+.5)*VS-bp.y,VMIN.z+(z+.5)*VS-bp.z);if(d>rad)continue;
   const a=(d<rad*.55?1:1-(d-rad*.55)/(rad*.45))*am,i=((z*Hh+y)*W+x)*4;
   for(let c=0;c<3;c++)volData[i+c]=Math.round(volData[i+c]+(tgt[c]-volData[i+c])*a);}
- volDirty=true;}
+ volDirty=true;paintNetDirty=true;}
 const tA=new THREE.Vector3(),tB=new THREE.Vector3(),tC=new THREE.Vector3(),tP=new THREE.Vector3(),bc=new THREE.Vector3();
 function bindAt(h){const m=h.object,pos=m.geometry.attributes.position,bp=m.geometry.attributes.bindPos,f=h.face;
  tA.fromBufferAttribute(pos,f.a);tB.fromBufferAttribute(pos,f.b);tC.fromBufferAttribute(pos,f.c);tP.copy(h.point);m.worldToLocal(tP);
@@ -468,32 +481,76 @@ renderer.setAnimationLoop(()=>{
  const showRing=paintMode&&(tool==='brush'||tool==='erase'||tool==='shade');ring.style.display=showRing?'block':'none';
  if(showRing){const d=size/(camD*Math.tan(camera.fov*Math.PI/360))*innerHeight;ring.style.width=ring.style.height=d+'px';ring.style.left=mx+'px';ring.style.top=my+'px';}
  sun.position.set(p.x+10,18,p.z+8);sun.target.position.copy(p);renderer.render(scene,camera);});
+// ================= Paint network sync =================
+// Fixes the "I look different to the hunter" bug: the old code sent only the single active
+// brush colour ('col') and tinted the whole remote body with it. That is not what you actually
+// painted, so a hunter never saw your real camo - just a flat swatch. Instead we now downsample
+// your real paint volume and send that, so every viewer sees the SAME camo you see on yourself.
+const PAINT_LX=12,PAINT_LY=18,PAINT_LZ=8;
+function bytesToBase64(bytes){let s='';const CH=0x2000;for(let i=0;i<bytes.length;i+=CH)s+=String.fromCharCode.apply(null,bytes.subarray(i,i+CH));return btoa(s);}
+function base64ToBytes(b64){const s=atob(b64),out=new Uint8Array(s.length);for(let i=0;i<s.length;i++)out[i]=s.charCodeAt(i);return out;}
+function samplePaintForNet(){
+ const W=VN[0],Hh=VN[1],D=VN[2],out=new Uint8Array(PAINT_LX*PAINT_LY*PAINT_LZ*3);let k=0;
+ for(let z=0;z<PAINT_LZ;z++){const sz=Math.min(D-1,Math.round(z/Math.max(1,PAINT_LZ-1)*(D-1)));
+  for(let y=0;y<PAINT_LY;y++){const sy=Math.min(Hh-1,Math.round(y/Math.max(1,PAINT_LY-1)*(Hh-1)));
+   for(let x=0;x<PAINT_LX;x++){const sx=Math.min(W-1,Math.round(x/Math.max(1,PAINT_LX-1)*(W-1)));
+    const si=((sz*Hh+sy)*W+sx)*4;out[k++]=volData[si];out[k++]=volData[si+1];out[k++]=volData[si+2];}}}
+ return out;
+}
+function applyRemotePaint(r,paint){
+ if(!paint||!paint.d)return;
+ const{lx,ly,lz,d}=paint,rgb=base64ToBytes(d),n=lx*ly*lz;
+ let rgba=r.paintRGBA;if(!rgba||rgba.length!==n*4){rgba=new Uint8Array(n*4);r.paintRGBA=rgba;}
+ for(let i=0;i<n;i++){rgba[i*4]=rgb[i*3];rgba[i*4+1]=rgb[i*3+1];rgba[i*4+2]=rgb[i*3+2];rgba[i*4+3]=255;}
+ const dimsChanged=!r.paintDims||r.paintDims[0]!==lx||r.paintDims[1]!==ly||r.paintDims[2]!==lz;
+ if(dimsChanged){if(r.rig.volTex)r.rig.volTex.dispose();
+  const tex=new THREE.Data3DTexture(rgba,lx,ly,lz);tex.format=THREE.RGBAFormat;tex.type=THREE.UnsignedByteType;
+  tex.minFilter=tex.magFilter=THREE.LinearFilter;tex.unpackAlignment=1;
+  r.rig.volTex=tex;r.rig.uniforms.uVol.value=tex;r.paintDims=[lx,ly,lz];}
+ else r.rig.volTex.image.data=rgba;
+ r.rig.volTex.needsUpdate=true;
+}
+
 // ================= Multiplayer =================
 const $$=id=>document.getElementById(id);
 const net={ws:null,myName:'',roomId:'',role:null,active:false,ended:false,players:new Set()};
 let frozen=false,mpMoveTimer=null,mpCountdown=null;
 const remotePlayers=new Map(),remoteGroup=new THREE.Group();scene.add(remoteGroup);
-function buildRig(mat){const P=(geo,par,x=0,y=0,z=0,sc=[1,1,1])=>{const m=new THREE.Mesh(geo,mat);m.position.set(x,y,z);m.scale.set(...sc);m.castShadow=true;par.add(m);return m;};
- const group=new THREE.Group(),body=pv(group,0,.73,0),flat=pv(body);
- P(new THREE.BoxGeometry(.42,.3,.34),flat,0,.02,0);
- const torsoP=pv(flat,0,.08,0);
- P(new THREE.BoxGeometry(.44,.58,.36),torsoP,0,.3,0);P(new THREE.BoxGeometry(.22,.16,.22),torsoP,0,.58,0);
- const headP=pv(torsoP,0,.6,0);P(new THREE.SphereGeometry(.3,32,24),headP,0,.27,0,[1.08,.96,1]);
- function limb(par,x,isArm){const L1=isArm?.28:.32,L2=isArm?.3:.4,w1=isArm?.16:.22,w2=isArm?.14:.19,top=pv(par,x,isArm?.5:0,0);
-  P(new THREE.BoxGeometry(w1*1.3,w1*1.3,w1*1.05),top);P(new THREE.BoxGeometry(w1,L1+.04,w1*.85),top,0,-L1/2,0);
-  const mid=pv(top,0,-L1,0);P(new THREE.BoxGeometry(w1*.95,w1*.95,w1*.8),mid);P(new THREE.BoxGeometry(w2,L2+.04,w2*.85),mid,0,-L2/2,0);return{top,mid};}
- const arms=[limb(torsoP,-.29,true),limb(torsoP,.29,true)],legsL=[limb(flat,-.13,false),limb(flat,.13,false)];
- arms[0].top.rotation.set(0,0,-1.35);arms[1].top.rotation.set(0,0,1.35);legsL[0].top.rotation.set(0,0,-.35);legsL[1].top.rotation.set(0,0,.35);
- return{group,body,flat,torsoP,headP,arms,legsL,mat};}
+// Every remote player gets their OWN volumetric paint texture (populated from network paint-sync
+// data), sampled with the exact same shader technique as the local player's charMat. uMin/uSize are
+// shared globally because every character shares identical bind-space geometry - only uVol differs.
+function makeRemoteMaterial(){
+ const uniforms={uVol:{value:null},uMin:volU.uMin,uSize:volU.uSize};
+ const mat=new THREE.MeshBasicMaterial({color:0xffffff,fog:false});
+ mat.onBeforeCompile=sh=>{Object.assign(sh.uniforms,uniforms);
+  sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nattribute vec3 bindPos;\nvarying vec3 vBind;').replace('#include <begin_vertex>','#include <begin_vertex>\nvBind=bindPos;');
+  sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\nvarying vec3 vBind;uniform highp sampler3D uVol;uniform vec3 uMin;uniform vec3 uSize;\nvec3 s2l(vec3 c){return mix(c/12.92,pow((c+.055)/1.055,vec3(2.4)),step(.04045,c));}')
+   .replace('#include <map_fragment>','diffuseColor.rgb*=s2l(texture(uVol,(vBind-uMin)/uSize).rgb);');};
+ return{mat,uniforms};
+}
+function buildRig(){
+ const{mat,uniforms}=makeRemoteMaterial();
+ const group=new THREE.Group(),parts=[];
+ const built=buildBlobBody(mat,group,m=>parts.push(m));
+ group.updateMatrixWorld(true);
+ const tv=new THREE.Vector3();
+ parts.forEach(m=>{const pos=m.geometry.attributes.position,arr=new Float32Array(pos.count*3);
+  for(let i=0;i<pos.count;i++){tv.fromBufferAttribute(pos,i).applyMatrix4(m.matrixWorld);tv.toArray(arr,i*3);}
+  m.geometry.setAttribute('bindPos',new THREE.BufferAttribute(arr,3));});
+ const defTex=new THREE.Data3DTexture(new Uint8Array([244,244,244,255]),1,1,1);                 // plain base colour until real paint data arrives
+ defTex.format=THREE.RGBAFormat;defTex.type=THREE.UnsignedByteType;defTex.minFilter=defTex.magFilter=THREE.LinearFilter;defTex.unpackAlignment=1;defTex.needsUpdate=true;
+ uniforms.uVol.value=defTex;
+ return{group,body:built.body,flat:built.flat,torsoP:built.torsoP,headP:built.headP,arms:built.arms,legsL:built.legsL,mat,uniforms,volTex:defTex,parts};
+}
 function poseRig(r,cur){r.arms[0].top.rotation.set(cur[0],0,-cur[1]);r.arms[0].mid.rotation.x=-cur[2];
  r.arms[1].top.rotation.set(cur[3],0,cur[4]);r.arms[1].mid.rotation.x=-cur[5];
  r.legsL[0].top.rotation.set(cur[6],0,-cur[7]);r.legsL[0].mid.rotation.x=cur[8];
  r.legsL[1].top.rotation.set(cur[9],0,cur[10]);r.legsL[1].mid.rotation.x=cur[11];
  r.body.position.y=.73+cur[12];r.body.rotation.set(cur[16],0,cur[17]);r.flat.scale.set(cur[19],1,cur[18]);
  r.torsoP.rotation.x=cur[13];r.headP.rotation.set(cur[14],cur[15],0);}
-function ensureRemote(name){let r=remotePlayers.get(name);if(!r){const rig=buildRig(new THREE.MeshBasicMaterial({color:0xffffff,fog:false}));
+function ensureRemote(name){let r=remotePlayers.get(name);if(!r){const rig=buildRig();
  rig.group.traverse(o=>{if(o.isMesh)o.userData.ownerName=name;});remoteGroup.add(rig.group);
- r={rig,group:rig.group,tx:0,ty:0,tz:0,try_:0,pose:'Stand',cur:I.slice(),caught:false};remotePlayers.set(name,r);}return r;}
+ r={rig,group:rig.group,tx:0,ty:0,tz:0,try_:0,pose:'Stand',cur:I.slice(),caught:false,paintDims:null,paintRGBA:null};remotePlayers.set(name,r);}return r;}
 function dropRemote(name){const r=remotePlayers.get(name);if(r){remoteGroup.remove(r.group);remotePlayers.delete(name);}}
 function removeAllRemotes(){remotePlayers.forEach(r=>remoteGroup.remove(r.group));remotePlayers.clear();}
 function mpDot(c){$$('mpdot').style.background=c;}
@@ -541,7 +598,8 @@ function mpHandle(m){
  if(m&&m.event==='requested data'&&Array.isArray(m.payload)){
   m.payload.forEach(p=>{if(!p||p.userName===net.myName)return;mpAddPlayer(p.userName);
    if(net.active){const r=ensureRemote(p.userName);if(p.position){r.tx=p.position.x;r.ty=p.position.y;r.tz=p.position.z;}
-    r.try_=p.rotation||0;if(p.color)r.rig.mat.color.set(p.color);if(p.pose&&POSES[p.pose]){r.pose=p.pose;r.cur=POSES[p.pose].slice();}
+    r.try_=p.rotation||0;if(p.pose&&POSES[p.pose]){r.pose=p.pose;r.cur=POSES[p.pose].slice();}
+    if(p.paint)applyRemotePaint(r,p.paint);
     if(p.caught){r.caught=true;r.rig.mat.color.set(0x888888);}}});
   return;
  }
@@ -560,12 +618,17 @@ function mpStartGame(role){
  setBanner('HIDE '+left+'s');$$('hwcount').textContent=left+'s';
  mpCountdown=setInterval(()=>{left--;b.classList.toggle('urgent',left<=10&&left>0);
   if(left<=0){mpReveal();clearInterval(mpCountdown);}else{setBanner('HIDE '+left+'s');$$('hwcount').textContent=left+'s';}},1000);
- clearInterval(mpMoveTimer);
+ clearInterval(mpMoveTimer);paintNetDirty=true;lastPaintSend=0;
  mpMoveTimer=setInterval(()=>{if(!net.active)return;
-  mpSend('movement',{roomId:net.roomId,userName:net.myName,coordinates:{x:cham.position.x,y:cham.position.y,z:cham.position.z,ry:cham.rotation.y,pose,col:color,userName:net.myName}});},100);
+  const coords={x:cham.position.x,y:cham.position.y,z:cham.position.z,ry:cham.rotation.y,pose,userName:net.myName},now=performance.now();
+  if(paintNetDirty&&now-lastPaintSend>350){                                         // throttle: real paint data is bigger than a plain position update
+   coords.paint={lx:PAINT_LX,ly:PAINT_LY,lz:PAINT_LZ,d:bytesToBase64(samplePaintForNet())};
+   paintNetDirty=false;lastPaintSend=now;
+  }
+  mpSend('movement',{roomId:net.roomId,userName:net.myName,coordinates:coords});},100);
 }
 function mpMove(c){if(!c||c.userName===net.myName)return;const r=ensureRemote(c.userName);if(r.caught)return;
- r.tx=c.x;r.ty=c.y;r.tz=c.z;r.try_=c.ry||0;if(c.col)r.rig.mat.color.set(c.col);if(c.pose&&POSES[c.pose])r.pose=c.pose;}
+ r.tx=c.x;r.ty=c.y;r.tz=c.z;r.try_=c.ry||0;if(c.pose&&POSES[c.pose])r.pose=c.pose;if(c.paint)applyRemotePaint(r,c.paint);}
 function mpCaught(hunter,hider){toast(hider+' was caught by '+hunter+'!');
  if(hider===net.myName){net.active=false;frozen=true;$$('rolebanner').textContent='YOU WERE CAUGHT';$$('rolebanner').classList.remove('urgent');}
  const r=remotePlayers.get(hider);if(r){r.caught=true;r.rig.mat.color.set(0x888888);}}
