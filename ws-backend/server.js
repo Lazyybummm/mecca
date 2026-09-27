@@ -25,6 +25,18 @@ function hunterNum(size){
 
 }
 
+function resetPlayerState(userName,keepRoom){
+    const st=ingameState.get(userName);
+    if(!st)return;
+    if(!keepRoom)st.roomId=null;
+    st.role=null;
+    st.pose='Stand';
+    st.position={x:0,y:0,z:0};
+    st.rotation=0;
+    st.color=null;
+    st.caught=false;
+}
+
 function cron(roomId,topic,time){//a usable cron i can register(look more into this)
 
     const handle=setTimeout(()=>{
@@ -51,6 +63,12 @@ function cron(roomId,topic,time){//a usable cron i can register(look more into t
                 payload:result?result:null
                 
             }))
+        }
+        if(topic=='room-end'){
+            for(const i of players){
+                resetPlayerState(i,true);
+            }
+            roomInfo.phase='lobby';
         }
        
     },time)
@@ -153,6 +171,7 @@ wss.on('connection',(socket)=>{
         if(payload.type=='movement'){
             const roomId=payload.data.roomId;
             const players=rooms.get(roomId);//this would provide me a set of all the players 
+            if(!players)return;
             const userName=payload.data.userName;
             const userState=ingameState.get(userName);
             if(userState&&payload.data.coordinates){
@@ -172,6 +191,11 @@ wss.on('connection',(socket)=>{
             const senderuserName=payload.data.userName;
             const roomId=payload.data.roomId;
             const hostName=roomAdmins.get(roomId);
+            const rsCheck=roomStates.get(roomId);
+            if(rsCheck&&rsCheck.phase!='lobby'&&rsCheck.phase!='created'){
+                socket.send(JSON.stringify({event:'error',message:'round already running'}));
+                return;
+            }
             if(hostName==senderuserName){
                 //calculate the length of the room
                 const roomLength=rooms.get(roomId).size;
@@ -186,7 +210,7 @@ wss.on('connection',(socket)=>{
                 for(const a of hunters){
                     const sock=idtoSocket.get(a);
                     const st=ingameState.get(a);
-                    if(st){st.role='hunter';st.caught=false;}
+                    if(st){st.role='hunter';st.caught=false;st.pose='Stand';st.color=null;st.position={x:0,y:0,z:0};st.rotation=0;}
                     sock.send(JSON.stringify({
                         event:'game-started',
                         role:'hunter'
@@ -196,7 +220,7 @@ wss.on('connection',(socket)=>{
                 for(const b of hiders){
                     const sock=idtoSocket.get(b)
                     const st=ingameState.get(b);
-                    if(st){st.role='hider';st.caught=false;}
+                    if(st){st.role='hider';st.caught=false;st.pose='Stand';st.color=null;st.position={x:0,y:0,z:0};st.rotation=0;}
                     sock.send(JSON.stringify({
                          event:'game-started',
                         role:'hider'
@@ -280,8 +304,7 @@ wss.on('connection',(socket)=>{
                     }))
                 }
                 for(const p of players){
-                    const st=ingameState.get(p);
-                    if(st){st.role=null;st.caught=false;}
+                    resetPlayerState(p,true);
                 }
                 roomInfo.phase='lobby';
             }
@@ -300,7 +323,7 @@ wss.on('connection',(socket)=>{
             currentState.pose=pose
             const roomId=currentState.roomId;
             const players=rooms.get(roomId);
-            for(p of players){
+            for(const p of players){
                 const sock=idtoSocket.get(p);
                 sock.send(JSON.stringify({
                     event:'pose changed ',
@@ -315,7 +338,7 @@ wss.on('connection',(socket)=>{
             const roomId=payload.data.roomId;
             let filteredData=[];
             //need to filter out all the object values with the given key 
-             for(p of ingameState.values){//returns an iterator for the map
+             for(const p of ingameState.values()){//returns an iterator for the map
                 if(p.roomId==roomId){
                     filteredData.push(p);
                 }
@@ -332,10 +355,11 @@ wss.on('connection',(socket)=>{
             const roomId=payload.data.roomId;
             const userName=payload.data.userName;
             const roomState=roomStates.get(roomId);
+            const userState=ingameState.get(userName);
+            if(!userState)return;
             if(roomState.phase=='lobby'){
                 rooms.get(roomId).delete(userName);
-                const userStateLobby=ingameState.get(userName);
-                if(userStateLobby)userStateLobby.roomId=null;
+                resetPlayerState(userName,false);
                 const currentMembers=rooms.get(roomId);
                 for (const p of currentMembers){
                     const sock=idtoSocket.get(p);
@@ -348,14 +372,13 @@ wss.on('connection',(socket)=>{
             }
             if(roomState.phase=='seek'|| roomState.phase=='hide'){
                 rooms.get(roomId).delete(userName);
-                const userState=ingameState.get(userName);
                 if(userState.role=='hider'){
                     roomState.remainingHiders=roomState.remainingHiders-1;
-                    roomState.hiders.filter(c=>c!=userName)
+                    roomState.hiders=roomState.hiders.filter(c=>c!=userName)
                     roomState.hiderSet.delete(userName);
                     if(roomState.remainingHiders==0){
                         roomState.phase='ended'
-                        if(userState)userState.roomId=null;
+                        resetPlayerState(userName,false);
                         const currentMembers=rooms.get(roomId);
                         for (const p of currentMembers){
                             const sock=idtoSocket.get(p);
@@ -369,7 +392,7 @@ wss.on('connection',(socket)=>{
                     //what if the last hider leaves , 
                 }
                 else{
-                    if(userState)userState.roomId=null;
+                    resetPlayerState(userName,false);
                     const currentMembers=rooms.get(roomId);
                     for (const p of currentMembers){
                         const sock=idtoSocket.get(p);
@@ -382,11 +405,11 @@ wss.on('connection',(socket)=>{
                 }}//there can be a case where it is not set , should use if?
                 else{
                     roomState.hunterSet.delete(userName)
-                    roomState.hunters.filter(c=>c!=userName)
+                    roomState.hunters=roomState.hunters.filter(c=>c!=userName)
                     if(roomState.hunterSet.size==0){
                         //now round should be ended
                         roomState.phase='ended'
-                        if(userState)userState.roomId=null;
+                        resetPlayerState(userName,false);
                         const currentMembers=rooms.get(roomId);
                         for (const p of currentMembers){
                             const sock=idtoSocket.get(p);
@@ -398,7 +421,7 @@ wss.on('connection',(socket)=>{
 
                     }
                     else{
-                        if(userState)userState.roomId=null;
+                        resetPlayerState(userName,false);
                         const currentMembers=rooms.get(roomId);
                         for (const p of currentMembers){
                             const sock=idtoSocket.get(p);
