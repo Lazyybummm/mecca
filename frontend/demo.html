@@ -37,29 +37,43 @@ input[type=range]{width:100%;accent-color:#e0407b}
 .wi{pointer-events:auto;cursor:pointer;background:#fff;color:#223;border:3px solid #ccd;border-radius:50%;width:88px;height:88px;display:flex;align-items:center;justify-content:center;text-align:center;font-weight:800;font-size:13px}
 .wi.hot{background:#ffd93d;border-color:#e0407b}.wi.cur{border-color:#2f9e5a}
 .hidden{display:none!important}
+@keyframes mpin{from{opacity:0;transform:translateY(10px) scale(.97)}to{opacity:1;transform:none}}
+@keyframes pulse{0%,100%{transform:translateX(-50%) scale(1)}50%{transform:translateX(-50%) scale(1.06)}}
+#rolebanner.urgent{animation:pulse .6s infinite}
 </style></head><body>
 <div id="overlay"><div id="logo"><div id="l1"></div><div id="l2"></div></div>
 <p>Hide. Blend in. Don't get found.<br>Paint (F), pose (hold R) and move - all at once. Practice maps, no time limit.</p>
-<div id="maps"><div class="mapc on" data-map="Mansion">Hide-and-Seek<br>Mansion</div><div class="mapc" data-map="Backrooms">Backrooms</div><div class="mapc" data-map="Sewer">Sewer</div></div>
+<div id="maps"><div class="mapc on" data-map="Mansion">Hide-and-Seek<br>Mansion</div><div class="mapc" data-map="Backrooms">Backrooms</div><div class="mapc" data-map="Sewer">Sewer</div><div class="mapc" data-map="Laundry">Laundry Room</div></div>
 <div class="btn" id="btnplay">PLAY (Solo Practice)</div>
 <div class="btn" id="btnmp" style="margin-top:10px;background:#33c3ff">MULTIPLAYER</div></div>
-<div id="mp" class="hidden" style="position:absolute;inset:0;z-index:40;display:flex;align-items:center;justify-content:center;background:linear-gradient(rgba(0,0,0,.5),rgba(0,0,0,.75))">
- <div style="background:#fff;color:#223;border-radius:20px;padding:22px 26px;width:320px;box-shadow:0 6px 0 rgba(0,0,0,.3)">
-  <h2 style="margin:0 0 12px;color:#e0407b">MULTIPLAYER</h2>
+<div id="mp" class="hidden" style="position:absolute;inset:0;z-index:40;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 50% 30%,rgba(60,90,70,.55),rgba(0,0,0,.85))">
+ <div style="background:#fff;color:#223;border-radius:22px;padding:24px 28px;width:330px;box-shadow:0 8px 0 rgba(0,0,0,.3);animation:mpin .25s ease-out">
+  <h2 style="margin:0 0 2px;color:#e0407b;letter-spacing:1px">MULTIPLAYER</h2>
+  <div style="font-size:11px;opacity:.55;margin-bottom:14px">Connect to a room and wait for the host</div>
   <label style="font-size:12px;font-weight:700">Server URL</label>
-  <input id="mpurl" value="ws://localhost:8080" style="width:100%;margin:4px 0 10px;padding:8px;border-radius:8px;border:1px solid #ccd;font:inherit">
+  <input id="mpurl" value="ws://localhost:8080" style="width:100%;margin:4px 0 10px;padding:9px;border-radius:9px;border:1px solid #dde;font:inherit;background:#f7f8fb">
   <label style="font-size:12px;font-weight:700">Your name</label>
-  <input id="mpname" placeholder="e.g. player1" style="width:100%;margin:4px 0 10px;padding:8px;border-radius:8px;border:1px solid #ccd;font:inherit">
+  <input id="mpname" placeholder="e.g. player1" style="width:100%;margin:4px 0 10px;padding:9px;border-radius:9px;border:1px solid #dde;font:inherit;background:#f7f8fb">
   <label style="font-size:12px;font-weight:700">Room ID</label>
-  <input id="mproom" placeholder="e.g. room1" style="width:100%;margin:4px 0 12px;padding:8px;border-radius:8px;border:1px solid #ccd;font:inherit">
+  <input id="mproom" placeholder="e.g. room1" style="width:100%;margin:4px 0 12px;padding:9px;border-radius:9px;border:1px solid #dde;font:inherit;background:#f7f8fb">
   <div class="btn" id="mpconnect" style="width:100%;text-align:center;background:#33c3ff">CONNECT & JOIN</div>
-  <div id="mpstatus" style="margin-top:10px;font-size:12px;min-height:18px;color:#666"></div>
-  <div id="mplist" style="margin:6px 0;font-size:12px;max-height:90px;overflow:auto"></div>
-  <div class="btn" id="mpstart" style="width:100%;text-align:center;margin-top:8px;background:#a6f0b8;display:none">START GAME</div>
-  <div id="mpback" style="text-align:center;margin-top:10px;font-size:12px;text-decoration:underline;cursor:pointer;color:#888">back</div>
+  <div style="display:flex;align-items:center;gap:7px;margin-top:11px">
+   <span id="mpdot" style="width:9px;height:9px;border-radius:50%;background:#ccc;flex:0 0 auto;transition:background .2s"></span>
+   <span id="mpstatus" style="font-size:12px;min-height:16px;color:#667">Not connected</span>
+  </div>
+  <div id="mplist" style="margin:8px 0;font-size:12px;max-height:100px;overflow:auto;line-height:1.8"></div>
+  <div class="btn" id="mpstart" style="width:100%;text-align:center;margin-top:6px;background:#a6f0b8;display:none">START GAME</div>
+  <div id="mpleave" style="text-align:center;margin-top:10px;font-size:12px;text-decoration:underline;cursor:pointer;color:#c0546e;display:none">leave room</div>
+  <div id="mpback" style="text-align:center;margin-top:6px;font-size:12px;text-decoration:underline;cursor:pointer;color:#888">back</div>
  </div>
 </div>
-<div id="rolebanner" class="hidden pill" style="top:16px;left:50%;transform:translateX(-50%);z-index:22;font-weight:800"></div>
+<div id="hunterwait" class="hidden" style="position:absolute;inset:0;z-index:28;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#0b0b0f;color:#fff;text-align:center">
+ <div style="font-size:46px;margin-bottom:6px">&#128584;</div>
+ <div style="font-size:22px;font-weight:800;letter-spacing:1px">HIDERS ARE HIDING...</div>
+ <div style="opacity:.6;margin:6px 0 18px;font-size:13px">You can't see the map until the seek phase begins</div>
+ <div id="hwcount" style="font-size:40px;font-weight:900;color:#ff9f9f"></div>
+</div>
+<div id="rolebanner" class="hidden pill" style="top:16px;left:50%;transform:translateX(-50%);z-index:22;font-weight:800;transition:background .3s"></div>
 <div id="endscreen" class="hidden" style="position:absolute;inset:0;z-index:45;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.75)">
  <div style="background:#fff;color:#223;border-radius:20px;padding:26px 34px;text-align:center;box-shadow:0 6px 0 rgba(0,0,0,.3)">
   <h2 id="endtitle" style="margin:0 0 10px">ROUND OVER</h2>
@@ -111,7 +125,8 @@ const T={
  paper:(a,b)=>ctex(128,128,g=>{g.fillStyle=a;g.fillRect(0,0,128,128);g.fillStyle=b;for(let i=0;i<128;i+=16)g.fillRect(i,0,8,128);rn(g,150,['rgba(0,0,0,.06)'],128,3);}),
  brick:(hsl,m)=>ctex(256,128,g=>{g.fillStyle=m;g.fillRect(0,0,256,128);for(let r=0;r<8;r++)for(let c=-1;c<4;c++){g.fillStyle=`hsl(${hsl[0]+Math.random()*8},${hsl[1]}%,${hsl[2]+Math.random()*9}%)`;g.fillRect(c*64+(r%2)*32+2,r*16+2,60,12);}}),
  carpet:()=>ctex(128,128,g=>{g.fillStyle='#b9a45a';g.fillRect(0,0,128,128);rn(g,1600,['#a8934a','#c9b56a']);}),
- tile:()=>ctex(128,128,g=>{g.fillStyle='#4d5a52';g.fillRect(0,0,128,128);g.fillStyle='#5f6d63';g.fillRect(3,3,58,58);g.fillRect(67,67,58,58);g.fillStyle='#56645b';g.fillRect(67,3,58,58);g.fillRect(3,67,58,58);rn(g,200,['rgba(0,0,0,.15)']);})
+ tile:()=>ctex(128,128,g=>{g.fillStyle='#4d5a52';g.fillRect(0,0,128,128);g.fillStyle='#5f6d63';g.fillRect(3,3,58,58);g.fillRect(67,67,58,58);g.fillStyle='#56645b';g.fillRect(67,3,58,58);g.fillRect(3,67,58,58);rn(g,200,['rgba(0,0,0,.15)']);}),
+ checker:()=>ctex(128,128,g=>{g.fillStyle='#e8e8e8';g.fillRect(0,0,128,128);g.fillStyle='#26282c';g.fillRect(0,0,64,64);g.fillRect(64,64,64,64);rn(g,120,['rgba(0,0,0,.08)']);})
 };
 const wc={};const wallTex=c=>wc[c]||(wc[c]=T.paper('#'+new THREE.Color(c).getHexString(),'#'+new THREE.Color(c).multiplyScalar(.92).getHexString()));
 const M=c=>c&&c.isTexture?new THREE.MeshStandardMaterial({map:c,roughness:.9}):new THREE.MeshStandardMaterial({color:c,roughness:.8});
@@ -134,37 +149,66 @@ function lamp(x,z){cyl(.05,.05,3.5,0x333333,x,0,z,{col:true});cyl(.3,.7,.8,0xffe
 const pal=i=>[0xff5733,0x33c3ff,0xffd93d,0x6bcb77,0xff6bd6,0xa66cff,0xff9f43][i%7];
 
 // ================= Maps (inspired by the official Mansion, Backrooms and Sewer; layouts are approximations) =================
+function statue(x,z,c=0xf5f0e6){cyl(.75,.85,.3,0xcdbfa0,x,0,z,{col:true});box(.5,1.7,.42,c,x,.3,z,{ry:.15});
+ box(.34,.95,.3,c,x-.08,1.75,z-.2,{ry:-.5});sph(.27,c,x,2.15,z-.05);}
+function balloons(x,z,cs){let y=.9;cs.forEach(c=>{sph(.32,c,x,y,z);y+=.6;});}
 function mansion(){
  const H=R+.25;
  wall(-R,H,R,H,0xe6cfa0);
- wall(-10,-R,-10,-6,0xcfe3f5);wall(-10,6,-10,R,0xcfe3f5);wall(10,-R,10,-6,0xf5d7f0);wall(10,6,10,R,0xf5d7f0);wall(-R,10,-18,10,0xcfe3f5);wall(18,-10,R,-10,0xf5d7f0);
- for(let i=-3;i<=3;i++)if(i)box(4,2.4,.2,0x9fdcff,i*7.5,2,-R+.4);
- [0xe94f4f,0x4f8ee9,0x59c26a,0xf1c40f].forEach((c,i)=>{box(1.8,1.3,.1,0x553311,-18+i*12,3,H-.4);box(1.5,1,.12,c,-18+i*12,3.15,H-.45);});
- // hall (centre)
- cyl(5,5,.04,0xc0392b,0,0,-18);cyl(4,4,.06,0xf1c40f,0,0,-18);cyl(3,3,.08,0x2980b9,0,0,-18);
- sofa(0,-27);table(0,-20,3,2);sofa(-6,-19,0x00b894);lamp(-8,-27);lamp(8,-27);plant(6,-25);plant(-6,-25);
- cyl(5,5,.04,0x16a085,0,0,20);cyl(3.5,3.5,.06,0xe67e22,0,0,20);
- for(let r=0;r<4;r++)for(let c=0;c<4-r;c++)box(1.2,1.2,1.2,[0xff5733,0x33c3ff,0xffd93d,0x6bcb77][(r+c)%4],-2+c*1.25+r*.62,r*1.2,20);
- cols.push({x:0,z:20,hw:2.6,hd:.7});
- [[-5,4],[5,4],[-5,-4],[5,-4]].forEach(([x,z])=>cyl(1,1,6,0xdfc7a0,x,0,z,{col:true}));   // pillars (ceiling-hang spots)
- box(4,.3,1,0x8e44ad,0,1,12,{col:[2,.5]});
- // kitchen + dining
- box(1.6,1.3,20,0xecf0f1,-29,0,-10,{col:true});box(1.8,.15,20,0x34495e,-29,1.3,-10);box(1.6,1.3,10,0xecf0f1,-29,0,18,{col:true});box(1.8,.15,10,0x34495e,-29,1.3,18);
- for(let i=0;i<8;i++)cyl(.25+rnd()*.15,.3,.4+rnd()*.4,pal(i),-29,1.45,-18+i*2.4);
- table(-20,-8,5,3);[[-1.6,-2.3],[1.6,-2.3],[-1.6,2.3],[1.6,2.3]].forEach(([a,b])=>chair(-20+a,-8+b,0xe17055));
- // library
- shelf(-22,-29);shelf(-15,-29);shelf(-27,-24,false);shelf(-27,22,false);shelf(-15,29);
- table(-18,18,3,2,0x6b3e15);chair(-18,20);sofa(-22,26,0xe17055);plant(-12,-27);plant(-28,4);lamp(-12,4);
- // bedroom + study
- box(3,.6,4.6,0x8e44ad,24,0,20,{col:true});box(2.7,.35,4,0xecf0f1,24,.6,20.1);box(1.4,.25,.8,0xffffff,24,.95,21.8);
- box(3,4.5,1.2,0x7a4a20,24,0,-28,{col:true});box(3,4.5,1.2,0x8a5a2b,20,0,-28,{col:true});
- table(18,-20,4,2);chair(18,-18,0x2980b9);sofa(16,26,0x0984e3);shelf(29,-3,false);shelf(29,4,false);shelf(29,11,false);plant(27,-8);plant(12,-27);lamp(28,14);
- for(let i=0;i<10;i++)sph(.35+rnd()*.4,pal(i),14+rnd()*8,0,-6+rnd()*6,{col:true});
- for(let i=0;i<140;i++){const x=(rnd()-.5)*(R*2-4),z=(rnd()-.5)*(R*2-4);if(Math.hypot(x,z)<2.5||(Math.abs(Math.abs(x)-10)<1.4&&Math.abs(z)>4.5))continue;
+ wall(-15,-R,-15,-9,0xcfe3f5);wall(-15,9,-15,R,0xcfe3f5);wall(15,-R,15,-9,0xf5d7f0);wall(15,9,15,R,0xf5d7f0);wall(-R,15,-27,15,0xcfe3f5);wall(27,-15,R,-15,0xf5d7f0);
+ for(let i=-4;i<=4;i++)if(i)box(4,2.6,.2,0x9fdcff,i*9,2,-R+.4);
+ [0xe94f4f,0x4f8ee9,0x59c26a,0xf1c40f,0xff6bd6,0x9b59b6].forEach((c,i)=>{box(1.9,1.4,.1,0x553311,-24+i*10,3,H-.4);box(1.6,1.1,.12,c,-24+i*10,3.15,H-.45);});
+ // grand hall (centre) - a big party floor like the reference: rings, streamers, statues, a staircase backdrop, round tables
+ cyl(8,8,.04,0xc0392b,0,0,-24);cyl(6.4,6.4,.06,0xf1c40f,0,0,-24);cyl(4.8,4.8,.08,0x2980b9,0,0,-24);
+ for(let k=0;k<10;k++){const a=k/10*Math.PI*2;box(.35,4+rnd()*2,.35,[0xe74c3c,0x3498db,0xf1c40f,0x2ecc71,0x9b59b6][k%5],Math.sin(a)*13,2,-24+Math.cos(a)*13,{ry:a});}
+ box(9,.4,7,0x6b3e15,0,.2,-38,{col:[4.5,3.5]});for(let s=0;s<6;s++)box(9-s*.5,.4,.9,0x7a4a20,0,.4+s*.4,-38+3-s*.9);         // staircase backdrop
+ statue(-4.5,-33);statue(4.5,-33);
+ sofa(0,-27);table(0,-20,3,2);sofa(-8,-19,0x00b894);lamp(-10,-27);lamp(10,-27);plant(7,-25);plant(-7,-25);
+ table(-9,-11,3.2,2.2);[[-1.4,-1.6],[1.4,-1.6],[-1.4,1.6],[1.4,1.6]].forEach(([a,b])=>chair(-9+a,-11+b));
+ table(9,-11,3.2,2.2);[[-1.4,-1.6],[1.4,-1.6],[-1.4,1.6],[1.4,1.6]].forEach(([a,b])=>chair(9+a,-11+b));
+ balloons(-11,-16,[0xff6bd6,0xffd93d,0x33c3ff]);balloons(11,-16,[0x6bcb77,0xff9f43,0xa66cff]);balloons(-6,-30,[0xff5733,0x33c3ff]);balloons(6,-30,[0xffd93d,0x6bcb77]);
+ cyl(7,7,.04,0x16a085,0,0,28);cyl(5.5,5.5,.06,0xe67e22,0,0,28);
+ for(let r=0;r<4;r++)for(let c=0;c<4-r;c++)box(1.3,1.3,1.3,[0xff5733,0x33c3ff,0xffd93d,0x6bcb77][(r+c)%4],-2.6+c*1.4+r*.7,r*1.3,28);
+ cols.push({x:0,z:28,hw:3,hd:.8});
+ [[-7,5],[7,5],[-7,-5],[7,-5]].forEach(([x,z])=>cyl(1.1,1.1,6.5,0xdfc7a0,x,0,z,{col:true}));   // pillars (ceiling-hang spots)
+ box(5,.35,1.2,0x8e44ad,0,1,16,{col:[2.5,.6]});
+ // kitchen + dining (west wing)
+ box(1.8,1.4,26,0xecf0f1,-42,0,-12,{col:true});box(2,.18,26,0x34495e,-42,1.4,-12);box(1.8,1.4,13,0xecf0f1,-42,0,25,{col:true});box(2,.18,13,0x34495e,-42,1.4,25);
+ for(let i=0;i<10;i++)cyl(.28+rnd()*.16,.32,.45+rnd()*.4,pal(i),-42,1.55,-24+i*2.7);
+ table(-30,-10,5.6,3.4);[[-1.9,-2.6],[1.9,-2.6],[-1.9,2.6],[1.9,2.6]].forEach(([a,b])=>chair(-30+a,-10+b,0xe17055));
+ // library (south-west)
+ shelf(-33,-42);shelf(-25,-42);shelf(-40,-35,false);shelf(-40,33,false);shelf(-25,42);
+ table(-27,26,3.4,2.2,0x6b3e15);chair(-27,28);sofa(-32,38,0xe17055);plant(-18,-40);plant(-42,6);lamp(-18,6);
+ // bedroom + study (east wing)
+ box(3.4,.7,5.4,0x8e44ad,35,0,28,{col:true});box(3,.4,4.6,0xecf0f1,35,.7,28.1);box(1.6,.28,.9,0xffffff,35,1.1,30.3);
+ box(3.4,5,1.4,0x7a4a20,35,0,-40,{col:true});box(3.4,5,1.4,0x8a5a2b,29,0,-40,{col:true});
+ table(26,-28,4.6,2.4);chair(26,-25,0x2980b9);sofa(23,38,0x0984e3);shelf(42,-5,false);shelf(42,5,false);shelf(42,15,false);plant(39,-11);plant(17,-40);lamp(40,20);
+ for(let i=0;i<12;i++)sph(.38+rnd()*.42,pal(i),20+rnd()*12,0,-9+rnd()*9,{col:true});
+ for(let i=0;i<220;i++){const x=(rnd()-.5)*(R*2-4),z=(rnd()-.5)*(R*2-4);if(Math.hypot(x,z)<3.5||(Math.abs(Math.abs(x)-15)<1.6&&Math.abs(z)>6.5))continue;
   const c=pal(i),t=i%5;
   if(t===0)box(.7+rnd()*.6,.7+rnd()*.6,.7+rnd()*.6,c,x,0,z,{col:true,ry:rnd()*3});else if(t===1)sph(.35+rnd()*.35,c,x,0,z,{col:true});
   else if(t===2)cyl(.3,.3,.7+rnd()*.6,c,x,0,z,{col:true});else if(t===3)cone(.35,.9,c,x,0,z,{col:true});
   else{box(.9,.9,.9,0xc8965a,x,0,z,{col:true,ry:rnd()*3});box(.6,.6,.6,c,x,.9,z);}}
+}
+function laundry(){
+ const H=R+.25;wall(-H,-H,H,-H,0xf2d6a8);wall(-H,H,H,H,0xf2d6a8);wall(-H,-H,-H,H,0xf2d6a8);wall(H,-H,H,H,0xf2d6a8);
+ // washer/dryer row
+ for(let i=0;i<6;i++){const x=-15+i*6;box(2.6,2.2,1.8,[0xd94f4f,0xd9b23a][i%2],x,0,-H+1.3,{col:true});cyl(.75,.75,.1,0x223,x,1.3,-H+2.25);cyl(.55,.55,.06,0x88bcd8,x,1.3,-H+2.3);}
+ box(6,.4,1.6,0x8899a0,-15,2.4,-H+1.3);box(6,.4,1.6,0x8899a0,3,2.4,-H+1.3);
+ for(let i=0;i<7;i++)box(.35+rnd()*.15,.45+rnd()*.15,.28,pal(i),-15+i*1.5,2.7,-H+2.1);
+ // clothesline with hanging garments
+ const cs=[0x6d8ff0,0x6bcb77,0xffd93d,0xff9f9f,0xdcdcdc,0xa66cff,0xff6bd6,0x33c3ff];
+ for(let k=-1;k<=1;k++){const zL=k*7;for(let i=0;i<9;i++){const x=-16+i*4,h=.9+rnd()*.4;
+  const m=new THREE.Mesh(new THREE.PlaneGeometry(.9,h),M(cs[(i+k+9)%8]));m.position.set(x,3-h/2,zL);m.rotation.y=(rnd()-.5)*.3;m.castShadow=true;mapG.add(m);}}
+ // towel / linen stacks on tables
+ [[-8,4],[0,4],[9,6],[16,2]].forEach(([x,z],idx)=>{box(2.4,1,1.6,0x6b3e15,x,.5,z,{col:true});
+  const layers=[0xffffff,0x4d6bff,0xffb84d,0xffffff,0x6bcb77];let y=1;
+  for(let l=0;l<layers.length;l++){box(2-rnd()*.3,.22,1.3-rnd()*.2,layers[(l+idx)%layers.length],x,y,z);y+=.24;}});
+ // sink + buckets + detergent
+ box(2.2,1.1,1,0x9aa5ab,17,1.1,-9,{col:true});cyl(.06,.06,.5,0x556,17.6,1.7,-9.3);
+ cyl(.55,.4,.8,0x4d6bff,-19,0,4,{col:true});cyl(.5,.35,1.1,0xffffff,-19,0,7,{col:true});box(.4,.5,.3,0x33c3ff,-19,.55,7);
+ cyl(.5,.35,1.1,0xffffff,17,0,10,{col:true});box(.4,.5,.3,0xff9f43,17,.55,10);
+ for(let i=0;i<8;i++){const x=(rnd()-.5)*(R*2-6),z=(rnd()-.5)*(R*2-6);if(Math.abs(z)>H-3)continue;box(.4,.4,.4,pal(i),x,0,z,{col:true,ry:rnd()*3});}
 }
 function backrooms(){
  const C=7,n=8,o=-R,sk=(a,b)=>Math.hypot(a,b-3)<7;
@@ -189,9 +233,10 @@ function sewer(){
  for(let z=-24;z<=24;z+=12)[-1,1].forEach(s=>sph(.22,0xffe08a,s*13.6,4,z));
 }
 const MAPS={
- Mansion:{R:30,bg:0xffe9c9,fog:[25,70],hl:[0xfff4e0,0x8a6a4a,.8],sun:.9,floor:T.wood,fr:16,w:()=>0xf2d6a8,build:mansion},
+ Mansion:{R:46,bg:0xffe9c9,fog:[32,95],hl:[0xfff4e0,0x8a6a4a,.8],sun:.9,floor:T.wood,fr:22,w:()=>0xf2d6a8,build:mansion},
  Backrooms:{R:28,bg:0xcfbf6a,fog:[10,36],hl:[0xfff6b0,0x8a7a30,1],sun:.25,floor:T.carpet,fr:20,w:()=>0xd6c56a,build:backrooms},
- Sewer:{R:28,bg:0x18241f,fog:[8,42],hl:[0x9fd8c8,0x2a3a30,.75],sun:.35,floor:T.tile,fr:14,w:()=>T.brick([12,14,30],'#131b19'),build:sewer}};
+ Sewer:{R:28,bg:0x18241f,fog:[8,42],hl:[0x9fd8c8,0x2a3a30,.75],sun:.35,floor:T.tile,fr:14,w:()=>T.brick([12,14,30],'#131b19'),build:sewer},
+ Laundry:{R:24,bg:0xb85a4a,fog:[14,44],hl:[0xffe8d8,0x6a3a30,.85],sun:.7,floor:T.checker,fr:12,w:()=>0x8a3a3a,build:laundry}};
 const MN=Object.keys(MAPS);let mapName='Mansion';
 function buildMap(name){
  mapName=name;const mp=MAPS[name];if(mapG)scene.remove(mapG);mapG=new THREE.Group();scene.add(mapG);walls=[];cols=[];seed=11;R=mp.R;
@@ -213,14 +258,17 @@ charMat.onBeforeCompile=sh=>{Object.assign(sh.uniforms,volU);
   .replace('#include <map_fragment>','diffuseColor.rgb*=s2l(texture(uVol,(vBind-uMin)/uSize).rgb);');};
 const part=(geo,par,x=0,y=0,z=0,sc=[1,1,1])=>{const m=new THREE.Mesh(geo,charMat);m.position.set(x,y,z);m.scale.set(...sc);m.userData.part=true;par.add(m);paintMeshes.push(m);return m;};
 const cham=new THREE.Group();scene.add(cham);
-const STAND=.73,body=pv(cham,0,STAND,0),flat=pv(body);          // flat = thickness/width scaling of the whole body
-part(new THREE.SphereGeometry(.2,24,16),flat,0,.02,0,[1.1,.75,.9]);
+const STAND=.73,body=pv(cham,0,STAND,0),flat=pv(body);
+part(new THREE.BoxGeometry(.42,.3,.34),flat,0,.02,0);                                   // pelvis - flat box, not a sphere
 const torsoP=pv(flat,0,.08,0);
-part(new THREE.CapsuleGeometry(.24,.16,8,24),torsoP,0,.3,0,[1,1,.85]);part(new THREE.SphereGeometry(.16,16,12),torsoP,0,.58,0);
-const headP=pv(torsoP,0,.6,0);part(new THREE.SphereGeometry(.3,32,24),headP,0,.27,0,[1.08,.96,1]);
-function limb(par,x,isArm){const L1=isArm?.28:.32,L2=isArm?.3:.4,r1=isArm?.075:.11,r2=isArm?.068:.095,top=pv(par,x,isArm?.5:0,0);
- part(new THREE.SphereGeometry(r1*1.35,16,12),top);part(new THREE.CapsuleGeometry(r1,L1-2*r1,6,14),top,0,-L1/2,0);
- const mid=pv(top,0,-L1,0);part(new THREE.SphereGeometry(r1,14,10),mid);part(new THREE.CapsuleGeometry(r2,L2-2*r2,6,14),mid,0,-L2/2,0);return{top,mid};}
+part(new THREE.BoxGeometry(.44,.58,.36),torsoP,0,.3,0);                                  // torso
+part(new THREE.BoxGeometry(.22,.16,.22),torsoP,0,.58,0);                                 // neck
+const headP=pv(torsoP,0,.6,0);part(new THREE.SphereGeometry(.3,32,24),headP,0,.27,0,[1.08,.96,1]); // head stays round - the game's signature blank head
+function limb(par,x,isArm){const L1=isArm?.28:.32,L2=isArm?.3:.4,w1=isArm?.16:.22,w2=isArm?.14:.19,top=pv(par,x,isArm?.5:0,0);
+ part(new THREE.BoxGeometry(w1*1.3,w1*1.3,w1*1.05),top);                                 // shoulder/hip joint - flat cube, not a ball
+ part(new THREE.BoxGeometry(w1,L1+.04,w1*.85),top,0,-L1/2,0);
+ const mid=pv(top,0,-L1,0);part(new THREE.BoxGeometry(w1*.95,w1*.95,w1*.8),mid);         // elbow/knee joint
+ part(new THREE.BoxGeometry(w2,L2+.04,w2*.85),mid,0,-L2/2,0);return{top,mid};}
 const arms=[limb(torsoP,-.29,true),limb(torsoP,.29,true)],legsL=[limb(flat,-.13,false),limb(flat,.13,false)];
 arms[0].top.rotation.set(0,0,-1.35);arms[1].top.rotation.set(0,0,1.35);legsL[0].top.rotation.set(0,0,-.35);legsL[1].top.rotation.set(0,0,.35);
 cham.updateMatrixWorld(true);
@@ -245,8 +293,8 @@ const POSES={
  'Sit':P({0:-.5,1:.15,2:.9,3:-.5,4:.15,5:.9,6:-1.57,7:.08,8:1.57,9:-1.57,10:.08,11:1.57,12:-.32,18:.85}),
  'Curl-Up':P({0:-1.3,1:.3,2:1.8,3:-1.3,4:.3,5:1.8,6:-1.9,7:.25,8:2.3,9:-1.9,10:.25,11:2.3,12:-.42,13:.7,14:.5,18:.8,19:.9}),
  'Ball':P({0:-1.5,1:.4,2:2.2,3:-1.5,4:.4,5:2.2,6:-2.2,7:.3,8:2.6,9:-2.2,10:.3,11:2.6,12:-.5,13:.9,14:.8,18:.85,19:.85}),
- 'Lie Flat':P({1:.03,2:0,4:.03,5:0,7:.02,10:.02,12:-.65,14:-.3,16:-1.57,18:.3}),
- 'Wall Flat':P({1:.03,2:0,4:.03,5:0,7:.02,8:0,10:.02,11:0,18:.22}),
+ 'Lie Flat':P({1:.03,2:0,4:.03,5:0,7:.02,10:.02,12:-.65,14:-.3,16:-1.57,18:.16,19:1.05}),
+ 'Wall Flat':P({1:.03,2:0,4:.03,5:0,7:.02,8:0,10:.02,11:0,18:.13,19:1.02}),
  'Kneel':P({6:0,8:1.57,9:0,11:1.57,12:-.31,18:.85}),
  'T-Pose':P({1:1.57,4:1.57,7:.08,10:.08,18:.6}),
  'Wave':P({4:2.5,5:.4,15:.2}),
@@ -268,7 +316,7 @@ function setHud(){const k=(a,b)=>`<div><kbd>${a}</kbd>${b}</div>`;
  hudEl.innerHTML=paintMode?k('WASD','Move')+k('Left-drag','Paint')+k('Space','Eyedropper')+k('Right-drag','Rotate')+k('C','Camo')+k('Shift+C','All sides')+k('R','Pose')+k('M','Map')+k('F','Done')
  :k('WASD','Move')+k('Drag','Look')+k('Space','Jump')+k('Ctrl','Crouch')+k('F','Paint')+k('R (hold)','Pose')+k('M','Map');}
 function setPaint(on){paintMode=on;panel.classList.toggle('hidden',!on);cvEl.style.cursor=on?'crosshair':'grab';setHud();}
-const setPose=n=>{pose=n;toast(n);};
+const setPose=n=>{pose=n;toast(n);if(net.active)mpSend('changed-pose',{userName:net.myName,pose:n});};
 function setTool(id){tool=id;document.querySelectorAll('#tools .chip').forEach(c=>c.classList.toggle('on',c.dataset.tool===id));}
 function setColor(hex){color=hex;picker.value=hex;}
 document.querySelectorAll('#tools .chip').forEach(c=>c.onclick=()=>setTool(c.dataset.tool));
@@ -346,10 +394,11 @@ cvEl.addEventListener('contextmenu',e=>e.preventDefault());
 cvEl.addEventListener('pointerdown',e=>{
  if(wOpen){wPage^=1;buildWheel();return;}
  cvEl.setPointerCapture(e.pointerId);mx=lx=e.clientX;my=ly=e.clientY;
- if(net.active&&net.role==='hunter'&&e.button===0){
-  const meshes=[...remotePlayers.values()].filter(r=>!r.caught).flatMap(r=>r.group.children);
-  const h=cast(meshes,e.clientX,e.clientY);
-  if(h)for(const[name,r]of remotePlayers)if(r.group.children.includes(h.object)){mpSend('mark-caught',{roomId:net.roomId,senderUsername:net.myName,targetUsername:name});break;}
+ if(net.active&&net.role==='hunter'&&net.phase==='seek'&&e.button===0){
+  const targets=[...remotePlayers.values()].filter(r=>!r.caught).map(r=>r.group);
+  ndc.set(e.clientX/innerWidth*2-1,-(e.clientY/innerHeight)*2+1);rc.setFromCamera(ndc,camera);
+  const hit=rc.intersectObjects(targets,true)[0];
+  if(hit&&hit.object.userData.ownerName)mpSend('mark-caught',{roomId:net.roomId,senderUsername:net.myName,targetUsername:hit.object.userData.ownerName});
   orbit=true;cvEl.style.cursor='grabbing';return;
  }
  if(!paintMode||e.button!==0){orbit=true;cvEl.style.cursor='grabbing';return;}
@@ -408,7 +457,8 @@ renderer.setAnimationLoop(()=>{
  if(paintMode&&painting&&(tool==='brush'||tool==='erase'||tool==='shade')){const dx=mx-lx,dy=my-ly,steps=Math.max(1,Math.ceil(Math.hypot(dx,dy)/3));
   for(let i=1;i<=steps;i++){const h=cast(paintMeshes,lx+dx*i/steps,ly+dy*i/steps);if(h)paint3D(bindAt(h),size,tool);}lx=mx;ly=my;}
  if(volDirty){volTex.needsUpdate=true;volDirty=false;}
- remotePlayers.forEach(r=>{const g=r.group,k=1-Math.exp(-10*dt);g.position.x+=(r.tx-g.position.x)*k;g.position.y+=(r.ty-g.position.y)*k;g.position.z+=(r.tz-g.position.z)*k;g.rotation.y+=wrap(r.try_-g.rotation.y)*k;});
+ remotePlayers.forEach(r=>{const g=r.group,k=1-Math.exp(-10*dt);g.position.x+=(r.tx-g.position.x)*k;g.position.y+=(r.ty-g.position.y)*k;g.position.z+=(r.tz-g.position.z)*k;g.rotation.y+=wrap(r.try_-g.rotation.y)*k;
+  const tgt=POSES[r.pose]||POSES.Stand,pk=1-Math.exp(-14*dt);for(let i=0;i<NP;i++)r.cur[i]+=(tgt[i]-r.cur[i])*pk;poseRig(r.rig,r.cur);});
  yaw+=(yawT-yaw)*(1-Math.exp(-28*dt));pitch+=(pitchT-pitch)*(1-Math.exp(-28*dt));
  camT.lerp(new THREE.Vector3(p.x,1.15+p.y*.6,p.z),1-Math.exp(-22*dt));cd+=(dist-cd)*(1-Math.exp(-8*dt));
  const off=new THREE.Vector3(Math.sin(yaw)*Math.cos(pitch),Math.sin(pitch),Math.cos(yaw)*Math.cos(pitch)).normalize();
@@ -423,70 +473,108 @@ const $$=id=>document.getElementById(id);
 const net={ws:null,myName:'',roomId:'',role:null,active:false,ended:false,players:new Set()};
 let frozen=false,mpMoveTimer=null,mpCountdown=null;
 const remotePlayers=new Map(),remoteGroup=new THREE.Group();scene.add(remoteGroup);
-function remoteAvatar(){const g=new THREE.Group(),m=new THREE.MeshBasicMaterial({color:0xffffff});
- const b=new THREE.Mesh(new THREE.CapsuleGeometry(.28,.55,6,12),m);b.position.y=.73;g.add(b);
- const h=new THREE.Mesh(new THREE.SphereGeometry(.28,16,12),m);h.position.y=1.35;g.add(h);g.userData.mat=m;return g;}
-function ensureRemote(name){let r=remotePlayers.get(name);if(!r){const group=remoteAvatar();remoteGroup.add(group);r={group,tx:0,ty:0,tz:0,try_:0,caught:false};remotePlayers.set(name,r);}return r;}
+function buildRig(mat){const P=(geo,par,x=0,y=0,z=0,sc=[1,1,1])=>{const m=new THREE.Mesh(geo,mat);m.position.set(x,y,z);m.scale.set(...sc);m.castShadow=true;par.add(m);return m;};
+ const group=new THREE.Group(),body=pv(group,0,.73,0),flat=pv(body);
+ P(new THREE.BoxGeometry(.42,.3,.34),flat,0,.02,0);
+ const torsoP=pv(flat,0,.08,0);
+ P(new THREE.BoxGeometry(.44,.58,.36),torsoP,0,.3,0);P(new THREE.BoxGeometry(.22,.16,.22),torsoP,0,.58,0);
+ const headP=pv(torsoP,0,.6,0);P(new THREE.SphereGeometry(.3,32,24),headP,0,.27,0,[1.08,.96,1]);
+ function limb(par,x,isArm){const L1=isArm?.28:.32,L2=isArm?.3:.4,w1=isArm?.16:.22,w2=isArm?.14:.19,top=pv(par,x,isArm?.5:0,0);
+  P(new THREE.BoxGeometry(w1*1.3,w1*1.3,w1*1.05),top);P(new THREE.BoxGeometry(w1,L1+.04,w1*.85),top,0,-L1/2,0);
+  const mid=pv(top,0,-L1,0);P(new THREE.BoxGeometry(w1*.95,w1*.95,w1*.8),mid);P(new THREE.BoxGeometry(w2,L2+.04,w2*.85),mid,0,-L2/2,0);return{top,mid};}
+ const arms=[limb(torsoP,-.29,true),limb(torsoP,.29,true)],legsL=[limb(flat,-.13,false),limb(flat,.13,false)];
+ arms[0].top.rotation.set(0,0,-1.35);arms[1].top.rotation.set(0,0,1.35);legsL[0].top.rotation.set(0,0,-.35);legsL[1].top.rotation.set(0,0,.35);
+ return{group,body,flat,torsoP,headP,arms,legsL,mat};}
+function poseRig(r,cur){r.arms[0].top.rotation.set(cur[0],0,-cur[1]);r.arms[0].mid.rotation.x=-cur[2];
+ r.arms[1].top.rotation.set(cur[3],0,cur[4]);r.arms[1].mid.rotation.x=-cur[5];
+ r.legsL[0].top.rotation.set(cur[6],0,-cur[7]);r.legsL[0].mid.rotation.x=cur[8];
+ r.legsL[1].top.rotation.set(cur[9],0,cur[10]);r.legsL[1].mid.rotation.x=cur[11];
+ r.body.position.y=.73+cur[12];r.body.rotation.set(cur[16],0,cur[17]);r.flat.scale.set(cur[19],1,cur[18]);
+ r.torsoP.rotation.x=cur[13];r.headP.rotation.set(cur[14],cur[15],0);}
+function ensureRemote(name){let r=remotePlayers.get(name);if(!r){const rig=buildRig(new THREE.MeshBasicMaterial({color:0xffffff,fog:false}));
+ rig.group.traverse(o=>{if(o.isMesh)o.userData.ownerName=name;});remoteGroup.add(rig.group);
+ r={rig,group:rig.group,tx:0,ty:0,tz:0,try_:0,pose:'Stand',cur:I.slice(),caught:false};remotePlayers.set(name,r);}return r;}
+function dropRemote(name){const r=remotePlayers.get(name);if(r){remoteGroup.remove(r.group);remotePlayers.delete(name);}}
 function removeAllRemotes(){remotePlayers.forEach(r=>remoteGroup.remove(r.group));remotePlayers.clear();}
+function mpDot(c){$$('mpdot').style.background=c;}
 function mpStatus(s){$$('mpstatus').textContent=s;}
-function mpAddPlayer(n){if(net.players.has(n))return;net.players.add(n);const d=document.createElement('div');d.textContent=n===net.myName?n+' (you)':n;$$('mplist').appendChild(d);}
+function mpAddPlayer(n){if(net.players.has(n))return;net.players.add(n);const d=document.createElement('div');d.id='mpp-'+n;d.textContent=n===net.myName?n+' (you)':n;$$('mplist').appendChild(d);}
+function mpDropPlayer(n){net.players.delete(n);const d=document.getElementById('mpp-'+n);if(d)d.remove();}
 function mpSend(type,data){if(net.ws&&net.ws.readyState===1)net.ws.send(JSON.stringify({type,data}));}
+function mpRequestState(){mpSend('request-state',{roomId:net.roomId});}
 
 $$('btnmp').onclick=()=>{overlay.classList.add('hidden');$$('mp').classList.remove('hidden');};
 $$('mpback').onclick=()=>{$$('mp').classList.add('hidden');overlay.classList.remove('hidden');};
+$$('mpleave').onclick=()=>{mpSend('leave-room',{roomId:net.roomId,userName:net.myName});setTimeout(()=>location.reload(),150);};
 $$('mpconnect').onclick=()=>{
  const url=$$('mpurl').value.trim(),name=$$('mpname').value.trim(),room=$$('mproom').value.trim();
  if(!name||!room){mpStatus('Enter a name and a room ID.');return;}
  if(net.ws)try{net.ws.close();}catch(e){}
- net.myName=name;net.roomId=room;net.players.clear();$$('mplist').innerHTML='';mpStatus('Connecting...');
- let sock;try{sock=new WebSocket(url);}catch(e){mpStatus('Invalid server URL.');return;}
+ net.myName=name;net.roomId=room;net.players.clear();$$('mplist').innerHTML='';mpStatus('Connecting...');mpDot('#f1c40f');
+ let sock;try{sock=new WebSocket(url);}catch(e){mpStatus('Invalid server URL.');mpDot('#e74c3c');return;}
  net.ws=sock;
  sock.onopen=()=>{mpStatus('Connected. Setting up...');mpSend('user-setup',{userName:name});};
- sock.onclose=()=>{if(!net.ended)mpStatus('Disconnected from server.');};
- sock.onerror=()=>{mpStatus("Couldn't reach the server - check the URL and that it's running.");};
+ sock.onclose=()=>{mpDot('#e74c3c');if(!net.ended)mpStatus('Disconnected from server.');};
+ sock.onerror=()=>{mpDot('#e74c3c');mpStatus("Couldn't reach the server - check the URL and that it's running.");};
  sock.onmessage=ev=>{let m;try{m=JSON.parse(ev.data);}catch(e){return;}mpHandle(m);};
 };
 function mpHandle(m){
  const text=typeof m==='string'?m:m.message;
- if(text==='connected')return;
+ if(text==='connected'){mpDot('#2ecc71');return;}
  if(text==='user setup is complete'){mpSend('join-room',{roomId:net.roomId,userName:net.myName});return;}
- if(text==='user setup complete'){mpStatus('That name is taken on this server - pick another and reconnect.');return;}
+ if(text==='user setup complete'){mpStatus('That name is taken on this server - pick another and reconnect.');mpDot('#e74c3c');return;}
  if(text==='roomId not found'){mpStatus('Enter a room ID first.');return;}
- if(text==='succesfully joined the room'){mpStatus('Joined room "'+net.roomId+'" - waiting for players...');mpAddPlayer(net.myName);$$('mpstart').style.display='block';return;}
+ if(text==='succesfully joined the room'){mpStatus('Joined room "'+net.roomId+'"');mpDot('#2ecc71');mpAddPlayer(net.myName);$$('mpstart').style.display='block';$$('mpleave').style.display='block';mpRequestState();return;}
  if(text==='only host can perform this action'){toast('Only the host can start the game.');return;}
+ if(m&&m.event==='error'){toast(m.message||'Server error');return;}
  if(m&&m.message==='a user joined'){mpAddPlayer(m.payload);return;}
+ if(m&&(m.event==='user left'||m.event==='player-left')){mpDropPlayer(m.userName);dropRemote(m.userName);toast(m.userName+' left');return;}
+ if(m&&(m.event==='room ended as the last hider left'||m.event==='room ended as the hunter left')){mpEnd(null,m.event==='room ended as the hunter left'?'HIDERS WIN - hunter left':'ROUND ENDED - last hider left');return;}
  if(m&&m.event==='player limit'){toast('Need at least 3 players to start.');return;}
  if(m&&m.event==='game-started'){mpStartGame(m.role);return;}
  if(m&&m.message==='a player moved'){mpMove(m.payload);return;}
  if(m&&m.event==='not authorized'){toast("Can't mark that player caught.");return;}
  if(m&&m.event==='player caught'){mpCaught(m.hunter,m.hider);return;}
  if(m&&(m.event==='room-end'||m.event==='round-end')){mpEnd(m.payload);return;}
- if(m&&m.event==='seek-phase'){$$('rolebanner').textContent=(net.role==='hunter'?'HUNTER':'HIDER')+' - SEEK PHASE';return;}
+ if(m&&m.event==='seek-phase'){clearInterval(mpCountdown);mpReveal();return;}
+ if(m&&m.event&&m.event.trim()==='pose changed'){return;} // pose itself already arrives via the movement stream
+ if(m&&m.event==='requested data'&&Array.isArray(m.payload)){
+  m.payload.forEach(p=>{if(!p||p.userName===net.myName)return;mpAddPlayer(p.userName);
+   if(net.active){const r=ensureRemote(p.userName);if(p.position){r.tx=p.position.x;r.ty=p.position.y;r.tz=p.position.z;}
+    r.try_=p.rotation||0;if(p.color)r.rig.mat.color.set(p.color);if(p.pose&&POSES[p.pose]){r.pose=p.pose;r.cur=POSES[p.pose].slice();}
+    if(p.caught){r.caught=true;r.rig.mat.color.set(0x888888);}}});
+  return;
+ }
 }
+function setBanner(t){const b=$$('rolebanner');b.textContent=(net.role==='hunter'?'HUNTER':'HIDER')+' - '+t;}
+function mpReveal(){net.phase='seek';frozen=false;$$('hunterwait').classList.add('hidden');setBanner('SEEK PHASE');}
 function mpStartGame(role){
- net.role=role;net.active=true;net.ended=false;frozen=false;removeAllRemotes();
+ net.role=role;net.active=true;net.ended=false;net.phase='hide';frozen=role==='hunter';removeAllRemotes();
  $$('mp').classList.add('hidden');$$('endscreen').classList.add('hidden');
  started=true;setPaint(false);
- const b=$$('rolebanner');b.classList.remove('hidden');b.style.background=role==='hunter'?'#ffb3b3':'#a6f0b8';
- toast('You are the '+role.toUpperCase()+(role==='hunter'?' - click a hider to mark them caught':' - paint (F) and blend in'));
+ const b=$$('rolebanner');b.classList.remove('hidden');b.classList.remove('urgent');b.style.background=role==='hunter'?'#ffb3b3':'#a6f0b8';
+ $$('hunterwait').classList.toggle('hidden',role!=='hunter');
+ toast('You are the '+role.toUpperCase()+(role==='hunter'?' - hiders get a head start, then you can see the map':' - paint (F) and blend in'));
+ mpRequestState();
  let left=120;clearInterval(mpCountdown);
- const label=t=>b.textContent=(role==='hunter'?'HUNTER':'HIDER')+' - '+t;
- label('HIDE '+left+'s');
- mpCountdown=setInterval(()=>{left--;if(left<=0){label('SEEK PHASE');clearInterval(mpCountdown);}else label('HIDE '+left+'s');},1000);
+ setBanner('HIDE '+left+'s');$$('hwcount').textContent=left+'s';
+ mpCountdown=setInterval(()=>{left--;b.classList.toggle('urgent',left<=10&&left>0);
+  if(left<=0){mpReveal();clearInterval(mpCountdown);}else{setBanner('HIDE '+left+'s');$$('hwcount').textContent=left+'s';}},1000);
  clearInterval(mpMoveTimer);
  mpMoveTimer=setInterval(()=>{if(!net.active)return;
-  mpSend('movement',{roomId:net.roomId,coordinates:{x:cham.position.x,y:cham.position.y,z:cham.position.z,ry:cham.rotation.y,pose,col:color,userName:net.myName}});},100);
+  mpSend('movement',{roomId:net.roomId,userName:net.myName,coordinates:{x:cham.position.x,y:cham.position.y,z:cham.position.z,ry:cham.rotation.y,pose,col:color,userName:net.myName}});},100);
 }
 function mpMove(c){if(!c||c.userName===net.myName)return;const r=ensureRemote(c.userName);if(r.caught)return;
- r.tx=c.x;r.ty=c.y;r.tz=c.z;r.try_=c.ry||0;if(c.col)r.group.userData.mat.color.set(c.col);}
+ r.tx=c.x;r.ty=c.y;r.tz=c.z;r.try_=c.ry||0;if(c.col)r.rig.mat.color.set(c.col);if(c.pose&&POSES[c.pose])r.pose=c.pose;}
 function mpCaught(hunter,hider){toast(hider+' was caught by '+hunter+'!');
- if(hider===net.myName){net.active=false;frozen=true;$$('rolebanner').textContent='YOU WERE CAUGHT';}
- const r=remotePlayers.get(hider);if(r){r.caught=true;r.group.userData.mat.color.set(0x888888);}}
-function mpEnd(result){if(net.ended)return;net.ended=true;net.active=false;clearInterval(mpMoveTimer);clearInterval(mpCountdown);
- $$('endtitle').textContent=result?result.toUpperCase():"TIME'S UP - HIDERS WIN";
+ if(hider===net.myName){net.active=false;frozen=true;$$('rolebanner').textContent='YOU WERE CAUGHT';$$('rolebanner').classList.remove('urgent');}
+ const r=remotePlayers.get(hider);if(r){r.caught=true;r.rig.mat.color.set(0x888888);}}
+function mpEnd(result,customTitle){if(net.ended)return;net.ended=true;net.active=false;clearInterval(mpMoveTimer);clearInterval(mpCountdown);
+ $$('hunterwait').classList.add('hidden');$$('rolebanner').classList.remove('urgent');
+ $$('endtitle').textContent=customTitle||(result?result.toUpperCase():"TIME'S UP - HIDERS WIN");
  $$('endsub').textContent='Room "'+net.roomId+'"';$$('endscreen').classList.remove('hidden');}
 $$('endagain').onclick=()=>{mpSend('start-game',{userName:net.myName,roomId:net.roomId});$$('endscreen').classList.add('hidden');mpStatus('Asked the host to start a new round...');};
-$$('endleave').onclick=()=>location.reload();
+$$('endleave').onclick=()=>{mpSend('leave-room',{roomId:net.roomId,userName:net.myName});setTimeout(()=>location.reload(),150);};
 $$('mpstart').onclick=()=>mpSend('start-game',{userName:net.myName,roomId:net.roomId});
 
 addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});

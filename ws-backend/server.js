@@ -328,6 +328,7 @@ wss.on('connection',(socket)=>{
                 sock.send(JSON.stringify({
                     event:'pose changed ',
                     userName:userName,
+                    pose:pose
                 }))
             }
             return;
@@ -435,6 +436,7 @@ wss.on('connection',(socket)=>{
             }
             
         }
+
 
 
     })
