@@ -246,20 +246,31 @@ function buildMap(name){
  mp.build();cham.position.set(0,0,3);$('mapname').textContent=name==='Mansion'?'Hide-and-Seek Mansion':name;
 }
 
-// ================= Humanoid: one body, paint lives in one shared 3D volume, drawn UNLIT (flat) so no seams =================
+// ================= Humanoid: one shared UV-atlas paint canvas per character, so what a hider paints is pixel-identical for every viewer =================
+// Every body part's UVs are remapped at build time into its own private rectangle of ONE shared
+// 2D canvas texture - like the panels of an unfolded papercraft model. Painting is then just plain
+// 2D canvas drawing at the raycast hit's UV: no seams, no lighting math, and syncing across the
+// network is a tiny {u,v,radius,color} stroke command replayed identically on every client, so a
+// hunter sees exactly the camo you painted rather than an approximation of it.
 const BASE='#f4f4f4',paintMeshes=[],wrap=a=>Math.atan2(Math.sin(a),Math.cos(a));
 const pv=(par,x=0,y=0,z=0)=>{const o=new THREE.Group();o.position.set(x,y,z);par.add(o);return o;};
-const VS=.02,VMIN=new THREE.Vector3(),volU={uVol:{value:null},uMin:{value:VMIN},uSize:{value:new THREE.Vector3()}};
-let VN,volData,volTex,volDirty=false;
-const charMat=new THREE.MeshBasicMaterial({color:0xffffff,fog:false});
-charMat.onBeforeCompile=sh=>{Object.assign(sh.uniforms,volU);
- sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nattribute vec3 bindPos;\nvarying vec3 vBind;').replace('#include <begin_vertex>','#include <begin_vertex>\nvBind=bindPos;');
- sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\nvarying vec3 vBind;uniform highp sampler3D uVol;uniform vec3 uMin;uniform vec3 uSize;\nvec3 s2l(vec3 c){return mix(c/12.92,pow((c+.055)/1.055,vec3(2.4)),step(.04045,c));}')
-  .replace('#include <map_fragment>','diffuseColor.rgb*=s2l(texture(uVol,(vBind-uMin)/uSize).rgb);');};
+const ATLAS_W=1000,ATLAS_H=800,ATLAS_COLS=5,ATLAS_ROWS=4;                              // 20 body-part cells (200x200 px each), one per mesh created below
+let forceFullSync=false,lastFullSync=0;const pendingStrokes=[];
+function rectFor(i){const col=i%ATLAS_COLS,row=Math.floor(i/ATLAS_COLS);
+ return{u0:col/ATLAS_COLS,v0:row/ATLAS_ROWS,u1:(col+1)/ATLAS_COLS,v1:(row+1)/ATLAS_ROWS};}
+function remapUV(geo,rect){const uv=geo.attributes.uv;for(let i=0;i<uv.count;i++){const u=uv.getX(i),v=uv.getY(i);
+ uv.setXY(i,rect.u0+u*(rect.u1-rect.u0),rect.v0+v*(rect.v1-rect.v0));}uv.needsUpdate=true;}
+function makePaintCanvas(){const c=document.createElement('canvas');c.width=ATLAS_W;c.height=ATLAS_H;const ctx=c.getContext('2d');
+ ctx.fillStyle=BASE;ctx.fillRect(0,0,ATLAS_W,ATLAS_H);
+ const tex=new THREE.CanvasTexture(c);tex.colorSpace=THREE.SRGBColorSpace;tex.flipY=false;tex.generateMipmaps=false;tex.minFilter=tex.magFilter=THREE.LinearFilter;
+ return{canvas:c,ctx,tex};}
 // Shared blobby-biped builder: one continuous set of overlapping spheres/capsules, no boxes, no hinge gaps.
-// Used for BOTH the local player and every networked player, so every character in the game shares one soft, featureless silhouette.
+// Used for BOTH the local player and every networked player, so every character in the game shares one soft,
+// featureless silhouette AND the same atlas layout (parts are created in the same order every time, so their
+// UV cells always line up across clients).
 function buildBlobBody(mat,parentGroup,register){
- const P=(geo,par,x=0,y=0,z=0,sc=[1,1,1])=>{const m=new THREE.Mesh(geo,mat);m.position.set(x,y,z);m.scale.set(...sc);m.castShadow=true;par.add(m);if(register)register(m);return m;};
+ let partIdx=0;
+ const P=(geo,par,x=0,y=0,z=0,sc=[1,1,1])=>{remapUV(geo,rectFor(partIdx++));const m=new THREE.Mesh(geo,mat);m.position.set(x,y,z);m.scale.set(...sc);m.castShadow=true;par.add(m);if(register)register(m);return m;};
  const STAND=.73,body=pv(parentGroup,0,STAND,0),flat=pv(body);
  P(new THREE.CapsuleGeometry(.235,.12,6,16),flat,0,.13,0);                          // soft pelvis/belly blob - melts into the chest
  const torsoP=pv(flat,0,.08,0);
@@ -281,20 +292,11 @@ function buildBlobBody(mat,parentGroup,register){
  return{body,flat,torsoP,headP,arms,legsL,STAND};
 }
 const cham=new THREE.Group();scene.add(cham);
+const{canvas:paintCanvas,ctx:paintCtx,tex:paintTex}=makePaintCanvas();
+const charMat=new THREE.MeshBasicMaterial({map:paintTex,fog:false});
+let paintDirty=false;
 const built=buildBlobBody(charMat,cham,m=>{m.userData.part=true;paintMeshes.push(m);});
 const {body,flat,torsoP,headP,arms,legsL,STAND}=built;
-cham.updateMatrixWorld(true);
-const bb0=new THREE.Box3(),tv=new THREE.Vector3();
-paintMeshes.forEach(m=>{const pos=m.geometry.attributes.position,arr=new Float32Array(pos.count*3);for(let i=0;i<pos.count;i++){tv.fromBufferAttribute(pos,i).applyMatrix4(m.matrixWorld);tv.toArray(arr,i*3);bb0.expandByPoint(tv);}
- m.geometry.setAttribute('bindPos',new THREE.BufferAttribute(arr,3));});
-bb0.expandByScalar(.06);VMIN.copy(bb0.min);
-const vsz=bb0.getSize(new THREE.Vector3());VN=[Math.ceil(vsz.x/VS),Math.ceil(vsz.y/VS),Math.ceil(vsz.z/VS)];
-volU.uSize.value.set(VN[0]*VS,VN[1]*VS,VN[2]*VS);
-volData=new Uint8Array(VN[0]*VN[1]*VN[2]*4);volTex=new THREE.Data3DTexture(volData,VN[0],VN[1],VN[2]);
-volTex.format=THREE.RGBAFormat;volTex.type=THREE.UnsignedByteType;volTex.minFilter=volTex.magFilter=THREE.LinearFilter;volTex.unpackAlignment=1;volU.uVol.value=volTex;
-function volFillAll(rgb){for(let i=0;i<volData.length;i+=4){volData[i]=rgb[0];volData[i+1]=rgb[1];volData[i+2]=rgb[2];volData[i+3]=255;}volDirty=true;paintNetDirty=true;}
-let paintNetDirty=true,lastPaintSend=0;
-volFillAll([244,244,244]);volTex.needsUpdate=true;
 
 // ================= Poses =================
 // 0-2 L arm (fwd,out,elbow) | 3-5 R arm | 6-8 L leg (fwd,out,knee) | 9-11 R leg | 12 height | 13 torso lean | 14 head pitch | 15 head yaw | 16 tilt fwd/back | 17 tilt side | 18 thickness (z) | 19 width (x)
@@ -354,25 +356,20 @@ function hoverWheel(){const dx=mx-innerWidth/2,dy=my-innerHeight/2;wSel=Math.hyp
 // ================= Painting =================
 const rgbOf=h=>[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)];
 const hexOf=(a,i=0)=>'#'+[a[i],a[i+1],a[i+2]].map(v=>v.toString(16).padStart(2,'0')).join('');
-function paint3D(bp,rad,mode,rgb=rgbOf(color)){rad=Math.max(rad,VS*1.2);
- const tgt=mode==='erase'?rgbOf(BASE):mode==='shade'?[0,0,0]:rgb,am=mode==='shade'?.07:1,W=VN[0],Hh=VN[1],D=VN[2];
- const lo=(v,c)=>Math.max(0,Math.floor((v-rad-c)/VS)),hi=(v,c,n)=>Math.min(n-1,Math.ceil((v+rad-c)/VS));
- for(let z=lo(bp.z,VMIN.z);z<=hi(bp.z,VMIN.z,D);z++)for(let y=lo(bp.y,VMIN.y);y<=hi(bp.y,VMIN.y,Hh);y++)for(let x=lo(bp.x,VMIN.x);x<=hi(bp.x,VMIN.x,W);x++){
-  const d=Math.hypot(VMIN.x+(x+.5)*VS-bp.x,VMIN.y+(y+.5)*VS-bp.y,VMIN.z+(z+.5)*VS-bp.z);if(d>rad)continue;
-  const a=(d<rad*.55?1:1-(d-rad*.55)/(rad*.45))*am,i=((z*Hh+y)*W+x)*4;
-  for(let c=0;c<3;c++)volData[i+c]=Math.round(volData[i+c]+(tgt[c]-volData[i+c])*a);}
- volDirty=true;paintNetDirty=true;}
-const tA=new THREE.Vector3(),tB=new THREE.Vector3(),tC=new THREE.Vector3(),tP=new THREE.Vector3(),bc=new THREE.Vector3();
-function bindAt(h){const m=h.object,pos=m.geometry.attributes.position,bp=m.geometry.attributes.bindPos,f=h.face;
- tA.fromBufferAttribute(pos,f.a);tB.fromBufferAttribute(pos,f.b);tC.fromBufferAttribute(pos,f.c);tP.copy(h.point);m.worldToLocal(tP);
- const out=new THREE.Vector3().fromBufferAttribute(bp,f.a);if(!THREE.Triangle.getBarycoord(tP,tA,tB,tC,bc))return out;
- tA.fromBufferAttribute(bp,f.a).multiplyScalar(bc.x);tB.fromBufferAttribute(bp,f.b).multiplyScalar(bc.y);tC.fromBufferAttribute(bp,f.c).multiplyScalar(bc.z);return out.copy(tA).add(tB).add(tC);}
-function volHex(bp){const W=VN[0],Hh=VN[1],D=VN[2],cl=(v,n)=>Math.max(0,Math.min(n-1,v));
- return hexOf(volData,((cl(Math.floor((bp.z-VMIN.z)/VS),D)*Hh+cl(Math.floor((bp.y-VMIN.y)/VS),Hh))*W+cl(Math.floor((bp.x-VMIN.x)/VS),W))*4);}
+function drawStroke(ctx,u,v,rNorm,mode,hex){
+ const cx=u*ATLAS_W,cy=v*ATLAS_H,r=Math.max(4,rNorm*ATLAS_W),shade=mode==='shade';
+ const rgb=shade?[0,0,0]:rgbOf(hex),a0=shade?.18:1,rgba=a=>`rgba(${rgb[0]},${rgb[1]},${rgb[2]},${a})`;
+ const g=ctx.createRadialGradient(cx,cy,0,cx,cy,r);g.addColorStop(0,rgba(a0));g.addColorStop(.55,rgba(a0));g.addColorStop(1,rgba(0));
+ ctx.save();ctx.fillStyle=g;ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);ctx.fill();ctx.restore();
+}
+const brushRNorm=()=>.015+(size-.02)/(.15-.02)*.09;
+function strokeAt(u,v,rNorm,mode,hex){drawStroke(paintCtx,u,v,rNorm,mode,hex);paintDirty=true;
+ pendingStrokes.push({u:+u.toFixed(4),v:+v.toFixed(4),r:+rNorm.toFixed(4),m:mode,c:hex});}
+function fillCanvas(hex){paintCtx.fillStyle=hex;paintCtx.fillRect(0,0,ATLAS_W,ATLAS_H);paintDirty=true;forceFullSync=true;}
 const undoStack=[];
-function snap(){undoStack.push(volData.slice());if(undoStack.length>15)undoStack.shift();}
-function undo(){const u=undoStack.pop();if(!u)return toast('Nothing to undo');volData.set(u);volDirty=true;toast('Undo');}
-$('undo').onclick=undo;$('fillall').onclick=()=>{snap();volFillAll(rgbOf(color));};$('clearall').onclick=()=>{snap();volFillAll(rgbOf(BASE));};
+function snap(){undoStack.push(paintCtx.getImageData(0,0,ATLAS_W,ATLAS_H));if(undoStack.length>15)undoStack.shift();}
+function undo(){const u=undoStack.pop();if(!u)return toast('Nothing to undo');paintCtx.putImageData(u,0,0);paintDirty=true;forceFullSync=true;toast('Undo');}
+$('undo').onclick=undo;$('fillall').onclick=()=>{snap();fillCanvas(color);};$('clearall').onclick=()=>{snap();fillCanvas(BASE);};
 const rc=new THREE.Raycaster(),rc2=new THREE.Raycaster(),ndc=new THREE.Vector2();
 function cast(list,cx,cy,cam=camera){ndc.set(cx/innerWidth*2-1,-(cy/innerHeight)*2+1);rc.setFromCamera(ndc,cam);return rc.intersectObjects(list,false)[0];}
 
@@ -384,7 +381,9 @@ function capture(cam){const s=renderer.getSize(new THREE.Vector2());
  renderer.readRenderTargetPixels(rt,0,0,s.x,s.y,px);}
 const pxAt=(x,y)=>((rt.height-1-Math.min(rt.height-1,Math.max(0,y|0)))*rt.width+Math.min(rt.width-1,Math.max(0,x|0)))*4;
 function pick(cx,cy){const h=cast(paintMeshes,cx,cy);let hex;
- if(h)hex=volHex(bindAt(h));else{capture(camera);hex=hexOf(px,pxAt(cx,cy));}
+ if(h){const px2=Math.min(ATLAS_W-1,Math.max(0,Math.round(h.uv.x*ATLAS_W))),py2=Math.min(ATLAS_H-1,Math.max(0,Math.round(h.uv.y*ATLAS_H)));
+  hex=hexOf(paintCtx.getImageData(px2,py2,1,1).data,0);}
+ else{capture(camera);hex=hexOf(px,pxAt(cx,cy));}
  setColor(hex);toast('Picked '+hex.toUpperCase());}
 function camoPass(cam,minDot){
  cham.updateMatrixWorld(true);cam.updateMatrixWorld(true);
@@ -395,7 +394,7 @@ function camoPass(cam,minDot){
  const step=Math.max(2,Math.ceil(Math.sqrt((X1-X0)*(Y1-Y0)/20000)));let n=0;
  for(let y=Y0;y<Y1;y+=step)for(let x=X0;x<X1;x+=step){const hit=cast(paintMeshes,x,y,cam);if(!hit)continue;
   if(hit.face.normal.clone().transformDirection(hit.object.matrixWorld).dot(rc.ray.direction)>-minDot)continue;
-  const i=pxAt(x,y);paint3D(bindAt(hit),step*hit.distance*2*Math.tan(cam.fov*Math.PI/360)/innerHeight*.9,'fill',[px[i],px[i+1],px[i+2]]);n++;}
+  const i=pxAt(x,y);strokeAt(hit.uv.x,hit.uv.y,.05,'brush',hexOf(px,i));n++;}
  return n;}
 function autoCamo(){snap();toast(camoPass(camera,.3)?'Camo matched - rotate and press C for other sides, or Shift+C for all':'Stand in front of a surface first');}
 function camoAround(){snap();const c=new THREE.PerspectiveCamera(50,innerWidth/innerHeight,.1,150),p=cham.position;
@@ -416,7 +415,7 @@ cvEl.addEventListener('pointerdown',e=>{
  }
  if(!paintMode||e.button!==0){orbit=true;cvEl.style.cursor='grabbing';return;}
  if(tool==='pick'||e.altKey){pick(e.clientX,e.clientY);if(tool==='pick')setTool('brush');return;}
- if(tool==='bucket'){const h=cast(paintMeshes,e.clientX,e.clientY);if(h){snap();paint3D(bindAt(h),.32,'brush');}return;}
+ if(tool==='bucket'){const h=cast(paintMeshes,e.clientX,e.clientY);if(h){snap();strokeAt(h.uv.x,h.uv.y,.14,'brush',color);}return;}
  snap();painting=true;});
 addEventListener('pointermove',e=>{mx=e.clientX;my=e.clientY;if(wOpen)hoverWheel();
  if(orbit){yawT-=e.movementX*.006;pitchT=Math.max(.05,Math.min(1.35,pitchT+e.movementY*.006));}});
@@ -468,8 +467,8 @@ renderer.setAnimationLoop(()=>{
  body.position.y=STAND+cur[12];body.rotation.set(cur[16],0,cur[17]);flat.scale.set(cur[19],1,cur[18]);torsoP.rotation.x=cur[13];headP.rotation.set(cur[14],cur[15],0);
  if(wOpen)wheel.querySelectorAll('.wi').forEach((d,i)=>d.classList.toggle('cur',PAGES[wPage][i]===pose));
  if(paintMode&&painting&&(tool==='brush'||tool==='erase'||tool==='shade')){const dx=mx-lx,dy=my-ly,steps=Math.max(1,Math.ceil(Math.hypot(dx,dy)/3));
-  for(let i=1;i<=steps;i++){const h=cast(paintMeshes,lx+dx*i/steps,ly+dy*i/steps);if(h)paint3D(bindAt(h),size,tool);}lx=mx;ly=my;}
- if(volDirty){volTex.needsUpdate=true;volDirty=false;}
+  for(let i=1;i<=steps;i++){const h=cast(paintMeshes,lx+dx*i/steps,ly+dy*i/steps);if(h)strokeAt(h.uv.x,h.uv.y,brushRNorm(),tool,tool==='erase'?BASE:color);}lx=mx;ly=my;}
+ if(paintDirty){paintTex.needsUpdate=true;paintDirty=false;}
  remotePlayers.forEach(r=>{const g=r.group,k=1-Math.exp(-10*dt);g.position.x+=(r.tx-g.position.x)*k;g.position.y+=(r.ty-g.position.y)*k;g.position.z+=(r.tz-g.position.z)*k;g.rotation.y+=wrap(r.try_-g.rotation.y)*k;
   const tgt=POSES[r.pose]||POSES.Stand,pk=1-Math.exp(-14*dt);for(let i=0;i<NP;i++)r.cur[i]+=(tgt[i]-r.cur[i])*pk;poseRig(r.rig,r.cur);});
  yaw+=(yawT-yaw)*(1-Math.exp(-28*dt));pitch+=(pitchT-pitch)*(1-Math.exp(-28*dt));
@@ -482,65 +481,28 @@ renderer.setAnimationLoop(()=>{
  if(showRing){const d=size/(camD*Math.tan(camera.fov*Math.PI/360))*innerHeight;ring.style.width=ring.style.height=d+'px';ring.style.left=mx+'px';ring.style.top=my+'px';}
  sun.position.set(p.x+10,18,p.z+8);sun.target.position.copy(p);renderer.render(scene,camera);});
 // ================= Paint network sync =================
-// Fixes the "I look different to the hunter" bug: the old code sent only the single active
-// brush colour ('col') and tinted the whole remote body with it. That is not what you actually
-// painted, so a hunter never saw your real camo - just a flat swatch. Instead we now downsample
-// your real paint volume and send that, so every viewer sees the SAME camo you see on yourself.
-const PAINT_LX=12,PAINT_LY=18,PAINT_LZ=8;
-function bytesToBase64(bytes){let s='';const CH=0x2000;for(let i=0;i<bytes.length;i+=CH)s+=String.fromCharCode.apply(null,bytes.subarray(i,i+CH));return btoa(s);}
-function base64ToBytes(b64){const s=atob(b64),out=new Uint8Array(s.length);for(let i=0;i<s.length;i++)out[i]=s.charCodeAt(i);return out;}
-function samplePaintForNet(){
- const W=VN[0],Hh=VN[1],D=VN[2],out=new Uint8Array(PAINT_LX*PAINT_LY*PAINT_LZ*3);let k=0;
- for(let z=0;z<PAINT_LZ;z++){const sz=Math.min(D-1,Math.round(z/Math.max(1,PAINT_LZ-1)*(D-1)));
-  for(let y=0;y<PAINT_LY;y++){const sy=Math.min(Hh-1,Math.round(y/Math.max(1,PAINT_LY-1)*(Hh-1)));
-   for(let x=0;x<PAINT_LX;x++){const sx=Math.min(W-1,Math.round(x/Math.max(1,PAINT_LX-1)*(W-1)));
-    const si=((sz*Hh+sy)*W+sx)*4;out[k++]=volData[si];out[k++]=volData[si+1];out[k++]=volData[si+2];}}}
- return out;
-}
-function applyRemotePaint(r,paint){
- if(!paint||!paint.d)return;
- const{lx,ly,lz,d}=paint,rgb=base64ToBytes(d),n=lx*ly*lz;
- let rgba=r.paintRGBA;if(!rgba||rgba.length!==n*4){rgba=new Uint8Array(n*4);r.paintRGBA=rgba;}
- for(let i=0;i<n;i++){rgba[i*4]=rgb[i*3];rgba[i*4+1]=rgb[i*3+1];rgba[i*4+2]=rgb[i*3+2];rgba[i*4+3]=255;}
- const dimsChanged=!r.paintDims||r.paintDims[0]!==lx||r.paintDims[1]!==ly||r.paintDims[2]!==lz;
- if(dimsChanged){if(r.rig.volTex)r.rig.volTex.dispose();
-  const tex=new THREE.Data3DTexture(rgba,lx,ly,lz);tex.format=THREE.RGBAFormat;tex.type=THREE.UnsignedByteType;
-  tex.minFilter=tex.magFilter=THREE.LinearFilter;tex.unpackAlignment=1;
-  r.rig.volTex=tex;r.rig.uniforms.uVol.value=tex;r.paintDims=[lx,ly,lz];}
- else r.rig.volTex.image.data=rgba;
- r.rig.volTex.needsUpdate=true;
-}
+// Painting lives on a single shared 2D canvas (the UV atlas), so syncing it is just 2D drawing
+// commands. Every stroke you make is queued as a tiny {u,v,radius,color,mode} packet and replayed
+// verbatim on every other client's copy of your canvas - same draw call, same pixels, so a hunter
+// sees exactly the camo you painted, not an approximation of it. A small compressed snapshot of the
+// whole canvas rides along once a second as a correctness backstop (covers whole-canvas ops like
+// Fill All / Clear All / Undo, and gives late joiners a complete picture immediately).
+const syncCanvas=document.createElement('canvas');syncCanvas.width=200;syncCanvas.height=160;const syncCtx=syncCanvas.getContext('2d');
+function fullSyncDataURL(){syncCtx.clearRect(0,0,200,160);syncCtx.drawImage(paintCanvas,0,0,200,160);return syncCanvas.toDataURL('image/jpeg',.6);}
+function applyRemoteStrokes(r,strokes){strokes.forEach(s=>drawStroke(r.rig.paintCtx,s.u,s.v,s.r,s.m,s.c));r.rig.paintTex.needsUpdate=true;}
+function applyRemoteSnapshot(r,dataURL){const img=new Image();img.onload=()=>{r.rig.paintCtx.drawImage(img,0,0,ATLAS_W,ATLAS_H);r.rig.paintTex.needsUpdate=true;};img.src=dataURL;}
 
 // ================= Multiplayer =================
 const $$=id=>document.getElementById(id);
 const net={ws:null,myName:'',roomId:'',role:null,active:false,ended:false,players:new Set()};
 let frozen=false,mpMoveTimer=null,mpCountdown=null;
 const remotePlayers=new Map(),remoteGroup=new THREE.Group();scene.add(remoteGroup);
-// Every remote player gets their OWN volumetric paint texture (populated from network paint-sync
-// data), sampled with the exact same shader technique as the local player's charMat. uMin/uSize are
-// shared globally because every character shares identical bind-space geometry - only uVol differs.
-function makeRemoteMaterial(){
- const uniforms={uVol:{value:null},uMin:volU.uMin,uSize:volU.uSize};
- const mat=new THREE.MeshBasicMaterial({color:0xffffff,fog:false});
- mat.onBeforeCompile=sh=>{Object.assign(sh.uniforms,uniforms);
-  sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nattribute vec3 bindPos;\nvarying vec3 vBind;').replace('#include <begin_vertex>','#include <begin_vertex>\nvBind=bindPos;');
-  sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\nvarying vec3 vBind;uniform highp sampler3D uVol;uniform vec3 uMin;uniform vec3 uSize;\nvec3 s2l(vec3 c){return mix(c/12.92,pow((c+.055)/1.055,vec3(2.4)),step(.04045,c));}')
-   .replace('#include <map_fragment>','diffuseColor.rgb*=s2l(texture(uVol,(vBind-uMin)/uSize).rgb);');};
- return{mat,uniforms};
-}
+// Every remote player gets their OWN paint canvas/texture (populated from network stroke and
+// snapshot data), using the exact same UV-atlas layout as the local player - only the pixels differ.
 function buildRig(){
- const{mat,uniforms}=makeRemoteMaterial();
- const group=new THREE.Group(),parts=[];
- const built=buildBlobBody(mat,group,m=>parts.push(m));
- group.updateMatrixWorld(true);
- const tv=new THREE.Vector3();
- parts.forEach(m=>{const pos=m.geometry.attributes.position,arr=new Float32Array(pos.count*3);
-  for(let i=0;i<pos.count;i++){tv.fromBufferAttribute(pos,i).applyMatrix4(m.matrixWorld);tv.toArray(arr,i*3);}
-  m.geometry.setAttribute('bindPos',new THREE.BufferAttribute(arr,3));});
- const defTex=new THREE.Data3DTexture(new Uint8Array([244,244,244,255]),1,1,1);                 // plain base colour until real paint data arrives
- defTex.format=THREE.RGBAFormat;defTex.type=THREE.UnsignedByteType;defTex.minFilter=defTex.magFilter=THREE.LinearFilter;defTex.unpackAlignment=1;defTex.needsUpdate=true;
- uniforms.uVol.value=defTex;
- return{group,body:built.body,flat:built.flat,torsoP:built.torsoP,headP:built.headP,arms:built.arms,legsL:built.legsL,mat,uniforms,volTex:defTex,parts};
+ const{canvas,ctx,tex}=makePaintCanvas(),mat=new THREE.MeshBasicMaterial({map:tex,fog:false});
+ const group=new THREE.Group(),built=buildBlobBody(mat,group,null);
+ return{group,body:built.body,flat:built.flat,torsoP:built.torsoP,headP:built.headP,arms:built.arms,legsL:built.legsL,mat,paintCanvas:canvas,paintCtx:ctx,paintTex:tex};
 }
 function poseRig(r,cur){r.arms[0].top.rotation.set(cur[0],0,-cur[1]);r.arms[0].mid.rotation.x=-cur[2];
  r.arms[1].top.rotation.set(cur[3],0,cur[4]);r.arms[1].mid.rotation.x=-cur[5];
@@ -550,7 +512,7 @@ function poseRig(r,cur){r.arms[0].top.rotation.set(cur[0],0,-cur[1]);r.arms[0].m
  r.torsoP.rotation.x=cur[13];r.headP.rotation.set(cur[14],cur[15],0);}
 function ensureRemote(name){let r=remotePlayers.get(name);if(!r){const rig=buildRig();
  rig.group.traverse(o=>{if(o.isMesh)o.userData.ownerName=name;});remoteGroup.add(rig.group);
- r={rig,group:rig.group,tx:0,ty:0,tz:0,try_:0,pose:'Stand',cur:I.slice(),caught:false,paintDims:null,paintRGBA:null};remotePlayers.set(name,r);}return r;}
+ r={rig,group:rig.group,tx:0,ty:0,tz:0,try_:0,pose:'Stand',cur:I.slice(),caught:false};remotePlayers.set(name,r);}return r;}
 function dropRemote(name){const r=remotePlayers.get(name);if(r){remoteGroup.remove(r.group);remotePlayers.delete(name);}}
 function removeAllRemotes(){remotePlayers.forEach(r=>remoteGroup.remove(r.group));remotePlayers.clear();}
 function mpDot(c){$$('mpdot').style.background=c;}
@@ -599,7 +561,7 @@ function mpHandle(m){
   m.payload.forEach(p=>{if(!p||p.userName===net.myName)return;mpAddPlayer(p.userName);
    if(net.active){const r=ensureRemote(p.userName);if(p.position){r.tx=p.position.x;r.ty=p.position.y;r.tz=p.position.z;}
     r.try_=p.rotation||0;if(p.pose&&POSES[p.pose]){r.pose=p.pose;r.cur=POSES[p.pose].slice();}
-    if(p.paint)applyRemotePaint(r,p.paint);
+    if(p.img)applyRemoteSnapshot(r,p.img);if(p.strokes)applyRemoteStrokes(r,p.strokes);
     if(p.caught){r.caught=true;r.rig.mat.color.set(0x888888);}}});
   return;
  }
@@ -618,17 +580,16 @@ function mpStartGame(role){
  setBanner('HIDE '+left+'s');$$('hwcount').textContent=left+'s';
  mpCountdown=setInterval(()=>{left--;b.classList.toggle('urgent',left<=10&&left>0);
   if(left<=0){mpReveal();clearInterval(mpCountdown);}else{setBanner('HIDE '+left+'s');$$('hwcount').textContent=left+'s';}},1000);
- clearInterval(mpMoveTimer);paintNetDirty=true;lastPaintSend=0;
+ clearInterval(mpMoveTimer);pendingStrokes.length=0;forceFullSync=true;lastFullSync=0;
  mpMoveTimer=setInterval(()=>{if(!net.active)return;
   const coords={x:cham.position.x,y:cham.position.y,z:cham.position.z,ry:cham.rotation.y,pose,userName:net.myName},now=performance.now();
-  if(paintNetDirty&&now-lastPaintSend>350){                                         // throttle: real paint data is bigger than a plain position update
-   coords.paint={lx:PAINT_LX,ly:PAINT_LY,lz:PAINT_LZ,d:bytesToBase64(samplePaintForNet())};
-   paintNetDirty=false;lastPaintSend=now;
-  }
+  if(pendingStrokes.length)coords.strokes=pendingStrokes.splice(0,40);              // tiny per-stroke commands: pixel-identical replay on every client
+  if(forceFullSync||now-lastFullSync>1000){coords.img=fullSyncDataURL();lastFullSync=now;forceFullSync=false;}   // compressed backstop for whole-canvas ops + late joiners
   mpSend('movement',{roomId:net.roomId,userName:net.myName,coordinates:coords});},100);
 }
 function mpMove(c){if(!c||c.userName===net.myName)return;const r=ensureRemote(c.userName);if(r.caught)return;
- r.tx=c.x;r.ty=c.y;r.tz=c.z;r.try_=c.ry||0;if(c.pose&&POSES[c.pose])r.pose=c.pose;if(c.paint)applyRemotePaint(r,c.paint);}
+ r.tx=c.x;r.ty=c.y;r.tz=c.z;r.try_=c.ry||0;if(c.pose&&POSES[c.pose])r.pose=c.pose;
+ if(c.img)applyRemoteSnapshot(r,c.img);if(c.strokes)applyRemoteStrokes(r,c.strokes);}
 function mpCaught(hunter,hider){toast(hider+' was caught by '+hunter+'!');
  if(hider===net.myName){net.active=false;frozen=true;$$('rolebanner').textContent='YOU WERE CAUGHT';$$('rolebanner').classList.remove('urgent');}
  const r=remotePlayers.get(hider);if(r){r.caught=true;r.rig.mat.color.set(0x888888);}}
