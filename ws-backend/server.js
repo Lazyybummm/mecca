@@ -5,7 +5,9 @@ const rooms=new Map();
 const roomStates=new Map();
 const idtoSocket=new Map();
 const roomAdmins=new Map();
-const huntCount=new Map();
+const huntCount=new Map();//for least hunt count based role assignment
+const ingameState=new Map();
+
 
 
 
@@ -92,6 +94,17 @@ wss.on('connection',(socket)=>{
                 return;
             }
             idtoSocket.set(userName,socket);
+            ingameState.set(userName,{
+                userName:userName,
+                roomId:null,
+                role:null,
+                pose:'Stand',
+                position:{x:0,y:0,z:0},
+                rotation:0,
+                color:null,
+                caught:false,
+                connected:true,
+            });
             socket.send(JSON.stringify('user setup is complete'));
         }
 
@@ -108,6 +121,8 @@ wss.on('connection',(socket)=>{
                 roomAdmins.set(roomId,userName);//setting the room admin
             }
             rooms.get(roomId).add(userName);
+            const userState=ingameState.get(userName);
+            if(userState)userState.roomId=roomId;
             const currentMembers=rooms.get(roomId);
             socket.send(JSON.stringify({
                 message:'succesfully joined the room',
@@ -130,6 +145,13 @@ wss.on('connection',(socket)=>{
         if(payload.type=='movement'){
             const roomId=payload.data.roomId;
             const players=rooms.get(roomId);//this would provide me a set of all the players 
+            const userName=payload.data.userName;
+            const userState=ingameState.get(userName);
+            if(userState&&payload.data.coordinates){
+                userState.position={x:payload.data.coordinates.x,y:payload.data.coordinates.y,z:payload.data.coordinates.z};
+                userState.rotation=payload.data.coordinates.ry||0;
+                if(payload.data.coordinates.col)userState.color=payload.data.coordinates.col;
+            }
             for (const p of players){
                 const sock=idtoSocket.get(p);
                sock.send(JSON.stringify({
@@ -155,6 +177,8 @@ wss.on('connection',(socket)=>{
                 const {hunters,hiders}=selectHunters(roomLength,roomId);//when destructuring , the name of the variable should be same as the return variables
                 for(const a of hunters){
                     const sock=idtoSocket.get(a);
+                    const st=ingameState.get(a);
+                    if(st){st.role='hunter';st.caught=false;}
                     sock.send(JSON.stringify({
                         event:'game-started',
                         role:'hunter'
@@ -163,6 +187,8 @@ wss.on('connection',(socket)=>{
 
                 for(const b of hiders){
                     const sock=idtoSocket.get(b)
+                    const st=ingameState.get(b);
+                    if(st){st.role='hider';st.caught=false;}
                     sock.send(JSON.stringify({
                          event:'game-started',
                         role:'hider'
@@ -217,6 +243,8 @@ wss.on('connection',(socket)=>{
             }
             roomInfo.caught.add(targetUsername);
             roomInfo.remainingHiders=roomInfo.remainingHiders-1;
+            const targetState=ingameState.get(targetUsername);
+            if(targetState)targetState.caught=true;
             //we can notify everyone also that this oaricular person is caught 
             const players=rooms.get(roomId);
             for(const p of players){//boradcasting to eveyrone that this particular user has been caught and to update thie rlocal states 
@@ -243,9 +271,62 @@ wss.on('connection',(socket)=>{
                         payload:'hunters won'
                     }))
                 }
+                for(const p of players){
+                    const st=ingameState.get(p);
+                    if(st){st.role=null;st.caught=false;}
+                }
             }
 
         }
+        else if(payload.topic=='changed-pose'){
+            const userName=payload.data.userName;
+            const pose=payload.data.pose
+            let currentState=ingameState.get(userName);
+            //set the pose in the local state and notify everyone 
+            if(!currentState){
+                socket.send("user not found with this username ")
+                return;
+
+            }
+            currentState.pose=pose
+            const roomId=currentState.roomId;
+            const players=rooms.get(roomId);
+            for(p of players){
+                const sock=idtoSocket.get(p);
+                sock.send(JSON.stringify({
+                    event:'pose changed ',
+                    userName:userName,
+                }))
+            }
+            return;
+
+            
+        }
 
     })
+
+    socket.on('close',()=>{
+        //find the user owning this socket
+        let foundUser=null;
+        for(const [name,sock] of idtoSocket){
+            if(sock===socket){foundUser=name;break;}
+        }
+        if(!foundUser)return;
+        const state=ingameState.get(foundUser);
+        if(state)state.connected=false;
+        idtoSocket.delete(foundUser);
+        if(state&&state.roomId){
+            const room=rooms.get(state.roomId);
+            if(room){
+                room.delete(foundUser);
+                for(const p of room){
+                    const sock=idtoSocket.get(p);
+                    if(sock)sock.send(JSON.stringify({
+                        event:'player-left',
+                        userName:foundUser
+                    }));
+                }
+            }
+        }
+    });
 })
