@@ -1,7 +1,6 @@
 {
   "name": "ws-backend",
   "version": "1.0.0",
-  "description": "",
   "main": "server.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
@@ -10,8 +9,9 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
+  "description": "",
   "type": "module",
   "dependencies": {
-    "ws": "^8.21.3"
+    "ws": "^8.22.0"
   }
 }
